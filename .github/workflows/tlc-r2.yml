@@ -34,7 +34,6 @@ jobs:
             -o tla2tools.jar
           echo 'ae9472e46b73383fff3055b9c7b080a6eb24adff  tla2tools.jar' | sha1sum -c -
           sha256sum tla2tools.jar | tee tla2tools.sha256
-          java -cp tla2tools.jar tlc2.TLC -help >/dev/null
 
       - name: Record model hashes
         shell: bash
