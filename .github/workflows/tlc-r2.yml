@@ -1,0 +1,161 @@
+name: Effect Kernel R2 TLC Verification
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'EffectKernel_TLA_R2.tla'
+      - 'EffectKernel_TLA_R2.cfg'
+      - '.github/workflows/tlc-r2.yml'
+
+jobs:
+  tlc:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Download pinned TLA+ tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL --retry 5 --retry-delay 3 \
+            https://github.com/tlaplus/tlaplus/releases/download/v1.8.0/tla2tools.jar \
+            -o tla2tools.jar
+          echo 'ae9472e46b73383fff3055b9c7b080a6eb24adff  tla2tools.jar' | sha1sum -c -
+          sha256sum tla2tools.jar | tee tla2tools.sha256
+          java -cp tla2tools.jar tlc2.TLC -help >/dev/null
+
+      - name: Record model hashes
+        shell: bash
+        run: |
+          sha256sum EffectKernel_TLA_R2.tla EffectKernel_TLA_R2.cfg | tee model.sha256
+
+      - name: Run TLC bounded safety campaign
+        id: tlc
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          java -XX:+UseParallelGC -Xmx5g -cp tla2tools.jar tlc2.TLC \
+            -config EffectKernel_TLA_R2.cfg \
+            -workers auto \
+            -deadlock \
+            -cleanup \
+            -checkpoint 0 \
+            EffectKernel_TLA_R2.tla 2>&1 | tee tlc.log
+          rc=${PIPESTATUS[0]}
+          echo "$rc" | tee tlc.exit_code
+          exit "$rc"
+
+      - name: Generate machine-verification receipt
+        if: always()
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, pathlib, re, subprocess, datetime
+
+          root = pathlib.Path('.')
+          log = (root / 'tlc.log').read_text(errors='replace') if (root/'tlc.log').exists() else ''
+          exit_code = int((root/'tlc.exit_code').read_text().strip()) if (root/'tlc.exit_code').exists() else None
+
+          def sha256(path):
+              h = hashlib.sha256()
+              with open(path, 'rb') as f:
+                  for chunk in iter(lambda: f.read(1024*1024), b''):
+                      h.update(chunk)
+              return h.hexdigest()
+
+          generated = distinct = left = depth = None
+          matches = list(re.finditer(r'(\d+) states generated, (\d+) distinct states found, (\d+) states left on queue', log))
+          if matches:
+              m = matches[-1]
+              generated, distinct, left = map(int, m.groups())
+          m = re.search(r'The depth of the complete state graph search is (\d+)', log)
+          if m:
+              depth = int(m.group(1))
+
+          no_error = 'Model checking completed. No error has been found.' in log
+          invariant_violation = bool(re.search(r'Invariant .* is violated|Invariant violation', log, re.I))
+          parsing_error = bool(re.search(r'Parsing or semantic analysis failed|SANY.*error|Semantic error|Parse Error', log, re.I))
+          java_version = subprocess.run(['java','-version'], capture_output=True, text=True).stderr.strip()
+
+          receipt = {
+              'artifact': 'EffectKernel_TLA_R2',
+              'abstract_checkpoint': 'EFFECT_KERNEL_SPEC_R0.2b',
+              'campaign': 'bounded_safety_tlc',
+              'timestamp_utc': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+              'tlc_release': 'v1.8.0',
+              'tlc_release_sha1_expected': 'ae9472e46b73383fff3055b9c7b080a6eb24adff',
+              'tla2tools_sha256': sha256('tla2tools.jar') if pathlib.Path('tla2tools.jar').exists() else None,
+              'java': java_version,
+              'model_sha256': sha256('EffectKernel_TLA_R2.tla'),
+              'config_sha256': sha256('EffectKernel_TLA_R2.cfg'),
+              'symmetry': 'Permutations(EffectIDs)',
+              'deadlock_checking': False,
+              'deadlock_note': 'Disabled intentionally because the finite safety model has legitimate quiescent terminal states; deadlock/quiescence is adjudicated separately.',
+              'exit_code': exit_code,
+              'states_generated': generated,
+              'distinct_states': distinct,
+              'states_left_on_queue': left,
+              'graph_depth': depth,
+              'model_check_completed_no_error': no_error,
+              'invariant_violation_detected': invariant_violation,
+              'parse_or_semantic_error_detected': parsing_error,
+              'pass': bool(exit_code == 0 and no_error and not invariant_violation and left == 0),
+              'claim_boundary': {
+                  'checked': 'Bounded exhaustive preservation of TypeOK and encoded I1-I7 for the configured finite transition system under the modeled assumptions.',
+                  'not_checked': [
+                      'Parameterized correctness for arbitrary system size',
+                      'Lean 4 theorem',
+                      'Rust/concrete implementation refinement',
+                      'A7 verifier soundness in deployed code',
+                      'A9 real dispatcher/physical denotational fidelity',
+                      'A10 real physical cost soundness',
+                      'A11 real adapter/deployment contract validity'
+                  ]
+              }
+          }
+          pathlib.Path('EK_TLC_R2_RECEIPT.json').write_text(json.dumps(receipt, indent=2) + '\n')
+          print(json.dumps(receipt, indent=2))
+          PY
+
+      - name: Upload TLC evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: effect-kernel-r2-tlc-evidence
+          path: |
+            EffectKernel_TLA_R2.tla
+            EffectKernel_TLA_R2.cfg
+            tlc.log
+            tlc.exit_code
+            tla2tools.sha256
+            model.sha256
+            EK_TLC_R2_RECEIPT.json
+
+      - name: Enforce verification pass
+        if: always()
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, sys
+          r = json.load(open('EK_TLC_R2_RECEIPT.json'))
+          if not r['pass']:
+              print('TLC VERIFICATION: FAIL / UNRESOLVED')
+              sys.exit(1)
+          print('TLC VERIFICATION: BOUNDED PASS')
+          print('generated:', r['states_generated'])
+          print('distinct:', r['distinct_states'])
+          print('depth:', r['graph_depth'])
+          PY
