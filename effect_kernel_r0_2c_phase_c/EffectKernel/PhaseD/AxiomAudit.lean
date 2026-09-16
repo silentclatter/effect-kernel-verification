@@ -1,0 +1,3 @@
+import EffectKernel.PhaseD.T3_PositiveAuthorityOrigin
+
+#print axioms EffectKernel.PhaseD.T3_positiveAuthorityOrigin
