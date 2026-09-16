@@ -1,0 +1,156 @@
+name: R0.2c Phase D-R1 Lean
+
+on:
+  push:
+    branches:
+      - r0-2c-phase-d-r1-lean
+
+permissions:
+  contents: read
+
+jobs:
+  prove:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Verify exact checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p effect_kernel_r0_2c_phase_c/ci_phase_d
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$GITHUB_SHA"
+          {
+            echo "GITHUB_SHA=$GITHUB_SHA"
+            echo "CHECKED_OUT_SHA=$actual"
+          } | tee effect_kernel_r0_2c_phase_c/ci_phase_d/CHECKOUT.txt
+
+      - name: Install pinned Lean toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh -o /tmp/elan-init.sh
+          sh /tmp/elan-init.sh -y --no-modify-path --default-toolchain none
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+
+      - name: Record exact tool versions
+        shell: bash
+        working-directory: effect_kernel_r0_2c_phase_c
+        run: |
+          set -euo pipefail
+          mkdir -p ci_phase_d
+          {
+            echo "lean-toolchain=$(cat lean-toolchain)"
+            lean --version
+            lake --version
+          } | tee ci_phase_d/VERSIONS.txt
+          grep -F 'Lean (version 4.34.0' ci_phase_d/VERSIONS.txt
+          grep -F 'Lake version 5.0.0-src+293d5d0' ci_phase_d/VERSIONS.txt
+
+      - name: Verify immutable Phase C sources
+        shell: bash
+        working-directory: effect_kernel_r0_2c_phase_c
+        run: |
+          set -euo pipefail
+          if [ -f phase_d_r1/PHASE_C_FROZEN_SOURCES_SHA256.txt ]; then
+            sha256sum -c phase_d_r1/PHASE_C_FROZEN_SOURCES_SHA256.txt | tee ci_phase_d/PHASE_C_SOURCE_VERIFY.txt
+          else
+            echo 'PRE-D0: no Phase D source manifest yet; exact base commit is the predecessor identity.' | tee ci_phase_d/PHASE_C_SOURCE_VERIFY.txt
+          fi
+
+      - name: Reject proof holes and unsafe declarations
+        shell: bash
+        working-directory: effect_kernel_r0_2c_phase_c
+        run: |
+          set -euo pipefail
+          mkdir -p ci_phase_d
+          set +e
+          grep -RInE --include='*.lean' '(\b(sorry|admit|axiom|unsafe|partial)\b|sorryAx)' . | tee ci_phase_d/PROOF_HOLE_SCAN.txt
+          status=${PIPESTATUS[0]}
+          set -e
+          if [ "$status" -eq 0 ]; then
+            echo 'Forbidden proof-hole or unsafe token found.' >&2
+            exit 1
+          elif [ "$status" -eq 1 ]; then
+            echo 'CLEAN: no forbidden proof-hole or unsafe token found.' | tee -a ci_phase_d/PROOF_HOLE_SCAN.txt
+          else
+            echo "grep failed with status $status" >&2
+            exit "$status"
+          fi
+
+      - name: Complete Phase C regression build
+        shell: bash
+        working-directory: effect_kernel_r0_2c_phase_c
+        run: |
+          set -euo pipefail
+          mkdir -p ci_phase_d
+          lake build 2>&1 | tee ci_phase_d/PHASE_C_BUILD.log
+          cat > ci_phase_d/PHASE_C_DECLARATIONS.lean <<'LEAN'
+          import EffectKernel.T4_BudgetConservation
+          #check EffectKernel.T0_wellFormed
+          #check EffectKernel.T9_lifecycle
+          #check EffectKernel.T1_constitution
+          #check EffectKernel.T2_transitiveAuthorityAttenuation
+          #check EffectKernel.T4_budgetConservation
+          #check EffectKernel.T4_e3_successor_epoch_start
+          LEAN
+          lake env lean ci_phase_d/PHASE_C_DECLARATIONS.lean 2>&1 | tee ci_phase_d/PHASE_C_DECLARATIONS.txt
+          lake env lean EffectKernel/AxiomAudit.lean 2>&1 | tee ci_phase_d/PHASE_C_AXIOM_AUDIT.txt
+
+      - name: Compile all Phase D sources
+        shell: bash
+        working-directory: effect_kernel_r0_2c_phase_c
+        run: |
+          set -euo pipefail
+          mkdir -p ci_phase_d
+          : > ci_phase_d/PHASE_D_BUILD.log
+          if [ -d EffectKernel/PhaseD ]; then
+            while IFS= read -r -d '' f; do
+              echo "===== $f =====" | tee -a ci_phase_d/PHASE_D_BUILD.log
+              lake env lean "$f" 2>&1 | tee -a ci_phase_d/PHASE_D_BUILD.log
+            done < <(find EffectKernel/PhaseD -type f -name '*.lean' -print0 | sort -z)
+          fi
+
+      - name: Hash proof sources and Phase D evidence
+        if: always()
+        shell: bash
+        working-directory: effect_kernel_r0_2c_phase_c
+        run: |
+          set -euo pipefail
+          mkdir -p ci_phase_d
+          : > ci_phase_d/PROOF_SOURCES_SHA256.txt
+          while IFS= read -r -d '' f; do
+            sha256sum "$f" >> ci_phase_d/PROOF_SOURCES_SHA256.txt
+          done < <(find EffectKernel -type f -name '*.lean' ! -path '*/ci*/*' -print0 | sort -z)
+          {
+            sha256sum lean-toolchain
+            sha256sum lakefile.toml
+            cat ci_phase_d/PROOF_SOURCES_SHA256.txt
+            if [ -d phase_d_r1 ]; then
+              while IFS= read -r -d '' f; do sha256sum "$f"; done < <(find phase_d_r1 -type f -print0 | sort -z)
+            fi
+            [ ! -f ci_phase_d/CHECKOUT.txt ] || sha256sum ci_phase_d/CHECKOUT.txt
+            [ ! -f ci_phase_d/VERSIONS.txt ] || sha256sum ci_phase_d/VERSIONS.txt
+            [ ! -f ci_phase_d/PHASE_C_SOURCE_VERIFY.txt ] || sha256sum ci_phase_d/PHASE_C_SOURCE_VERIFY.txt
+            [ ! -f ci_phase_d/PROOF_HOLE_SCAN.txt ] || sha256sum ci_phase_d/PROOF_HOLE_SCAN.txt
+            [ ! -f ci_phase_d/PHASE_C_BUILD.log ] || sha256sum ci_phase_d/PHASE_C_BUILD.log
+            [ ! -f ci_phase_d/PHASE_C_DECLARATIONS.txt ] || sha256sum ci_phase_d/PHASE_C_DECLARATIONS.txt
+            [ ! -f ci_phase_d/PHASE_C_AXIOM_AUDIT.txt ] || sha256sum ci_phase_d/PHASE_C_AXIOM_AUDIT.txt
+            [ ! -f ci_phase_d/PHASE_D_BUILD.log ] || sha256sum ci_phase_d/PHASE_D_BUILD.log
+          } > ci_phase_d/SHA256_MANIFEST.txt
+          cat ci_phase_d/SHA256_MANIFEST.txt
+
+      - name: Upload Phase D-R1 replay artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: effect-kernel-r0-2c-phase-d-r1-${{ github.sha }}
+          if-no-files-found: error
+          retention-days: 90
+          path: |
+            effect_kernel_r0_2c_phase_c/
+            !effect_kernel_r0_2c_phase_c/.lake/
