@@ -723,8 +723,7 @@ theorem T4_budgetConservation {judge : ProvisionJudge}
   | updatePolicyPositive hprev hevent hsupport ih =>
       intro r d hroot
       have hpreSupport := hprev.support
-      have hb : ProvisionBudget _ _ _ _ := by
-        simpa using hevent.update.budgetRule
+      have hb := hevent.update.budgetRule
       rw [provision_mass_eq hpreSupport hevent.update.gammaSame hb
         hevent.canonicalRoot (query := r) (d := d)]
       simp only [Provisioned]
