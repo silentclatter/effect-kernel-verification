@@ -4,16 +4,6 @@ namespace EffectKernel.PhaseD
 
 open EffectKernel
 
-/-- Extract the actual continuation after an observed step. This is proof-only
-trace structure; no runtime state or transition is added. -/
-private def suffixFromStepAt
-    {E : FullEnv} {s0 z : State} {h : FullTrace E s0 z}
-    {i : Nat} {lbl : StepLabel} {a b : State}
-    (ho : StepAt h i lbl a b) : FullTrace E b z := by
-  induction ho with
-  | last hp hs => exact .refl
-  | earlier hsEnd ho ih => exact .step ih hsEnd
-
 private theorem sameEffectBinding_refl (r : LifecycleRecord) :
     SameEffectBinding r r := by
   simp [SameEffectBinding]
@@ -58,8 +48,8 @@ private theorem fullStep_preserves_postLinearized
 
 /-- Once `k` is past its authorization linearization, every later full step
 preserves the Phase-C `SameEffectBinding` projection for `k`. Attempts to reuse
-PREPARE/COMMIT_START/EXPIRE_RESERVATION on the same key are rejected here by the
-one-way lifecycle source-state equations, not by a snapshot certificate. -/
+PREPARE/COMMIT_START/EXPIRE_RESERVATION on the same key are rejected by their
+actual lifecycle source-state equations, not by a snapshot certificate. -/
 private theorem fullStep_preserves_binding_after_linearization
     {E : FullEnv} {lbl : StepLabel} {s t : State} {k : EffectKey}
     (h : FullStep E lbl s t) (hp : PostLinearized (s.lifecycle k).state) :
@@ -137,35 +127,72 @@ it is not a field of trusted state. -/
 def SnapshotBinding (σ : AuthSnapshot) (s : State) : Prop :=
   SameEffectBinding (σ.predecessor.lifecycle σ.effectKey) (s.lifecycle σ.effectKey)
 
-/-- Along an actual continuation that begins after linearization, every later
-step endpoint preserves the same frozen authorization binding. -/
-private theorem continuation_snapshot_invariant
-    {E : FullEnv} {start z : State} {h : FullTrace E start z}
-    {σ : AuthSnapshot}
-    (hstartPost : PostLinearized (start.lifecycle σ.effectKey).state)
-    (hstartBind : SnapshotBinding σ start) :
-    PostLinearized (z.lifecycle σ.effectKey).state ∧
-    SnapshotBinding σ z ∧
-    ∀ {i : Nat} {lbl : StepLabel} {a b : State},
-      StepAt h i lbl a b → SnapshotBinding σ a ∧ SnapshotBinding σ b := by
-  induction h with
+/-- A linearization occurrence fixes the same binding at the terminal state of
+its containing trace.  This is proved by following the actual later full steps. -/
+private theorem snapshot_binding_at_terminal
+    {E : FullEnv} {s0 z : State} {h : FullTrace E s0 z} {k : EffectKey}
+    {j now : Nat} {before after : State}
+    (ho : StepAt h j (.commitStart k now) before after) :
+    PostLinearized (z.lifecycle k).state ∧
+    SnapshotBinding (snapshotOf before k now) z := by
+  induction h generalizing j now before after with
   | refl =>
-      refine ⟨hstartPost, hstartBind, ?_⟩
-      intro i lbl a b ho
       cases ho
-  | @step s t lbl hp hs ih =>
-      rcases ih with ⟨hpostS, hbindS, hinv⟩
-      have hpostT : PostLinearized (t.lifecycle σ.effectKey).state :=
-        fullStep_preserves_postLinearized hs hpostS
-      have hstepBind : SameEffectBinding (s.lifecycle σ.effectKey) (t.lifecycle σ.effectKey) :=
-        fullStep_preserves_binding_after_linearization hs hpostS
-      have hbindT : SnapshotBinding σ t := by
-        exact sameEffectBinding_trans hbindS hstepBind
-      refine ⟨hpostT, hbindT, ?_⟩
-      intro i lbl0 a b ho
+  | @step s t lbl hp hsEnd ih =>
       cases ho with
-      | last hp0 hs0 => exact ⟨hbindS, hbindT⟩
-      | earlier hs0 hop => exact hinv hop
+      | last hp0 hs0 =>
+          have hpost : PostLinearized (t.lifecycle k).state := by
+            rw [hs0.base.lifecycleUpdate.update.postState]
+            trivial
+          have hbind : SnapshotBinding (snapshotOf s k now) t := by
+            simpa [SnapshotBinding, snapshotOf] using
+              hs0.base.lifecycleUpdate.update.binding
+          exact ⟨hpost, hbind⟩
+      | earlier hsEnd0 hop =>
+          rcases ih hop with ⟨hpostS, hbindS⟩
+          have hpostT : PostLinearized (t.lifecycle k).state :=
+            fullStep_preserves_postLinearized hsEnd hpostS
+          have hstepBind : SameEffectBinding (s.lifecycle k) (t.lifecycle k) :=
+            fullStep_preserves_binding_after_linearization hsEnd hpostS
+          have hbindT : SnapshotBinding (snapshotOf before k now) t := by
+            exact sameEffectBinding_trans hbindS hstepBind
+          exact ⟨hpostT, hbindT⟩
+
+/-- Any strictly later full-step occurrence has both endpoints bound to the
+snapshot from the unique earlier COMMIT_START. -/
+private theorem snapshot_binding_at_later_step
+    {E : FullEnv} {s0 z : State} {h : FullTrace E s0 z} {k : EffectKey}
+    {j now : Nat} {before after : State}
+    (hlin : StepAt h j (.commitStart k now) before after)
+    {i : Nat} {lbl : StepLabel} {a b : State}
+    (hlater : StepAt h i lbl a b)
+    (hji : j < i) :
+    SnapshotBinding (snapshotOf before k now) a ∧
+    SnapshotBinding (snapshotOf before k now) b := by
+  induction h generalizing j now before after i lbl a b with
+  | refl =>
+      cases hlin
+  | @step s t lblEnd hp hsEnd ih =>
+      cases hlin with
+      | last hpLin hsLin =>
+          cases hlater with
+          | last hpLater hsLater =>
+              exact False.elim (Nat.lt_irrefl _ hji)
+          | earlier hsLater hprev =>
+              have hiLt : i < hp.length := StepAt.index_lt_length hprev
+              exact False.elim ((Nat.lt_asymm hji) hiLt)
+      | earlier hsLin hlinPrev =>
+          cases hlater with
+          | earlier hsLater hlaterPrev =>
+              exact ih hlinPrev hlaterPrev hji
+          | last hpLater hsLater =>
+              rcases snapshot_binding_at_terminal hlinPrev with
+                ⟨hpostS, hbindS⟩
+              have hstepBind : SameEffectBinding (s.lifecycle k) (t.lifecycle k) :=
+                fullStep_preserves_binding_after_linearization hsEnd hpostS
+              have hbindT : SnapshotBinding (snapshotOf before k now) t := by
+                exact sameEffectBinding_trans hbindS hstepBind
+              exact ⟨hbindS, hbindT⟩
 
 /-- T7 — Authorization Snapshot Sufficiency.
 
@@ -173,9 +200,9 @@ SUCCESSOR RESTATEMENT — ORIGINAL PHASE A BYTES NOT RECOVERED.
 
 At the unique COMMIT_START linearization, authorization is evaluated from the
 actual predecessor trusted state and is extensionally identical to evaluation
-from `snapshotOf` that predecessor. The Phase-C binding projection is then
-preserved across every later step in the actual continuation; later mutable
-trusted state is not consulted to re-evaluate the frozen authorization. -/
+from `snapshotOf` that predecessor. The Phase-C binding projection is preserved
+at both endpoints of every strictly later trusted step; later mutable trusted
+state is not consulted to re-evaluate the frozen authorization. -/
 theorem T7_authorizationSnapshotSufficiency
     {E : FullEnv} {s0 z : State} {h : FullTrace E s0 z} {k : EffectKey}
     (hinitState : (s0.lifecycle k).state = .unseen)
@@ -189,7 +216,7 @@ theorem T7_authorizationSnapshotSufficiency
     AuthorizedFromSnapshot E (snapshotOf before k now) ∧
     SnapshotBinding (snapshotOf before k now) after ∧
     (∀ {i : Nat} {lbl : StepLabel} {a b : State},
-      StepAt (suffixFromStepAt ho) i lbl a b →
+      StepAt h i lbl a b → j < i →
         SnapshotBinding (snapshotOf before k now) a ∧
         SnapshotBinding (snapshotOf before k now) b) := by
   have hs : FullStep E (.commitStart k now) before after := StepAt.fullStep ho
@@ -202,11 +229,6 @@ theorem T7_authorizationSnapshotSufficiency
     hequiv.mp hauth
   have hbind : SnapshotBinding (snapshotOf before k now) after := by
     simpa [SnapshotBinding, snapshotOf] using hs.base.lifecycleUpdate.update.binding
-  have hpost : PostLinearized (after.lifecycle k).state := by
-    rw [hs.base.lifecycleUpdate.update.postState]
-    trivial
-  have hinv := continuation_snapshot_invariant
-    (σ := snapshotOf before k now) (h := suffixFromStepAt ho) hpost hbind
   have huniq :=
     (T6_uniqueAuthorizationLinearization
       (E := E) (s0 := s0) (z := z) (h := h) (k := k)
@@ -214,6 +236,7 @@ theorem T7_authorizationSnapshotSufficiency
   refine ⟨?_, hequiv, hsnap, hbind, ?_⟩
   · intro i now' a b hi
     exact huniq hi ho
-  · exact hinv.2.2
+  · intro i lbl a b hi hji
+    exact snapshot_binding_at_later_step ho hi hji
 
 end EffectKernel.PhaseD
