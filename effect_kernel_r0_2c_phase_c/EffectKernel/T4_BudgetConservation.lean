@@ -1,5 +1,5 @@
 import EffectKernel.T2_AuthorityAttenuation
-import Std.Tactic.Omega
+import EffectKernel.OmegaCompat
 
 namespace EffectKernel
 
