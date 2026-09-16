@@ -142,47 +142,30 @@ step endpoint preserves the same frozen authorization binding. -/
 private theorem continuation_snapshot_invariant
     {E : FullEnv} {start z : State} {h : FullTrace E start z}
     {σ : AuthSnapshot}
-    (hkey : σ.effectKey = σ.effectKey)
     (hstartPost : PostLinearized (start.lifecycle σ.effectKey).state)
     (hstartBind : SnapshotBinding σ start) :
+    PostLinearized (z.lifecycle σ.effectKey).state ∧
     SnapshotBinding σ z ∧
     ∀ {i : Nat} {lbl : StepLabel} {a b : State},
       StepAt h i lbl a b → SnapshotBinding σ a ∧ SnapshotBinding σ b := by
-  clear hkey
   induction h with
   | refl =>
-      constructor
-      · exact hstartBind
-      · intro i lbl a b ho
-        cases ho
+      refine ⟨hstartPost, hstartBind, ?_⟩
+      intro i lbl a b ho
+      cases ho
   | @step s t lbl hp hs ih =>
-      rcases ih with ⟨hbindS, hinv⟩
-      have hpostS : PostLinearized (s.lifecycle σ.effectKey).state := by
-        exact postLinearized_reach hstartPost
-          (trustedStep_lifecycle_one (FullTrace.toReachable hp |> fun hr => by
-            cases hr with
-            | refl => exact TrustedStep.expireGrant {
-                grantExists := by
-                  exact ⟨0, by simp [GrantExists]⟩
-                constitutionSame := rfl
-                governanceSame := rfl
-                gammaSame := rfl
-                budgetSame := rfl
-                lifecycleSame := rfl
-                metaAuthSame := rfl
-                epochSame := rfl
-              }
-            | step _ hs0 => exact hs0) σ.effectKey)
-      have hstepBind :=
+      rcases ih with ⟨hpostS, hbindS, hinv⟩
+      have hpostT : PostLinearized (t.lifecycle σ.effectKey).state :=
+        fullStep_preserves_postLinearized hs hpostS
+      have hstepBind : SameEffectBinding (s.lifecycle σ.effectKey) (t.lifecycle σ.effectKey) :=
         fullStep_preserves_binding_after_linearization hs hpostS
-      have hbindT : SnapshotBinding σ t :=
-        sameEffectBinding_trans hbindS hstepBind
-      constructor
-      · exact hbindT
-      · intro i lbl0 a b ho
-        cases ho with
-        | last hp0 hs0 => exact ⟨hbindS, hbindT⟩
-        | earlier hs0 hop => exact hinv hop
+      have hbindT : SnapshotBinding σ t := by
+        exact sameEffectBinding_trans hbindS hstepBind
+      refine ⟨hpostT, hbindT, ?_⟩
+      intro i lbl0 a b ho
+      cases ho with
+      | last hp0 hs0 => exact ⟨hbindS, hbindT⟩
+      | earlier hs0 hop => exact hinv hop
 
 /-- T7 — Authorization Snapshot Sufficiency.
 
@@ -190,7 +173,7 @@ SUCCESSOR RESTATEMENT — ORIGINAL PHASE A BYTES NOT RECOVERED.
 
 At the unique COMMIT_START linearization, authorization is evaluated from the
 actual predecessor trusted state and is extensionally identical to evaluation
-from `snapshotOf` that predecessor.  The Phase-C binding projection is then
+from `snapshotOf` that predecessor. The Phase-C binding projection is then
 preserved across every later step in the actual continuation; later mutable
 trusted state is not consulted to re-evaluate the frozen authorization. -/
 theorem T7_authorizationSnapshotSufficiency
@@ -199,33 +182,38 @@ theorem T7_authorizationSnapshotSufficiency
     (hinitUsed : (s0.lifecycle k).used = false)
     {j now : Nat} {before after : State}
     (ho : StepAt h j (.commitStart k now) before after) :
-    let σ := snapshotOf before k now
     (∀ {i now' : Nat} {a b : State},
       StepAt h i (.commitStart k now') a b → i = j) ∧
-    (AuthorizedAt E now before k ↔ AuthorizedFromSnapshot E σ) ∧
-    AuthorizedFromSnapshot E σ ∧
-    SnapshotBinding σ after ∧
+    (AuthorizedAt E now before k ↔
+      AuthorizedFromSnapshot E (snapshotOf before k now)) ∧
+    AuthorizedFromSnapshot E (snapshotOf before k now) ∧
+    SnapshotBinding (snapshotOf before k now) after ∧
     (∀ {i : Nat} {lbl : StepLabel} {a b : State},
       StepAt (suffixFromStepAt ho) i lbl a b →
-        SnapshotBinding σ a ∧ SnapshotBinding σ b) := by
-  let σ := snapshotOf before k now
+        SnapshotBinding (snapshotOf before k now) a ∧
+        SnapshotBinding (snapshotOf before k now) b) := by
   have hs : FullStep E (.commitStart k now) before after := StepAt.fullStep ho
   have hauth : AuthorizedAt E now before k := by
     simpa [FullGuard] using hs.guard
-  have hequiv : AuthorizedAt E now before k ↔ AuthorizedFromSnapshot E σ := by
-    simpa [σ] using authorizedAt_snapshot_iff E before k now
-  have hsnap : AuthorizedFromSnapshot E σ := hequiv.mp hauth
-  have hbind : SnapshotBinding σ after := by
-    simpa [SnapshotBinding, σ, snapshotOf] using hs.base.lifecycleUpdate.update.binding
+  have hequiv : AuthorizedAt E now before k ↔
+      AuthorizedFromSnapshot E (snapshotOf before k now) := by
+    exact authorizedAt_snapshot_iff E before k now
+  have hsnap : AuthorizedFromSnapshot E (snapshotOf before k now) :=
+    hequiv.mp hauth
+  have hbind : SnapshotBinding (snapshotOf before k now) after := by
+    simpa [SnapshotBinding, snapshotOf] using hs.base.lifecycleUpdate.update.binding
   have hpost : PostLinearized (after.lifecycle k).state := by
     rw [hs.base.lifecycleUpdate.update.postState]
     trivial
   have hinv := continuation_snapshot_invariant
-    (σ := σ) (h := suffixFromStepAt ho) (by rfl) hpost hbind
-  have huniq := (T6_uniqueAuthorizationLinearization hinitState hinitUsed).1
+    (σ := snapshotOf before k now) (h := suffixFromStepAt ho) hpost hbind
+  have huniq :=
+    (T6_uniqueAuthorizationLinearization
+      (E := E) (s0 := s0) (z := z) (h := h) (k := k)
+      hinitState hinitUsed).1
   refine ⟨?_, hequiv, hsnap, hbind, ?_⟩
   · intro i now' a b hi
     exact huniq hi ho
-  · exact hinv.2
+  · exact hinv.2.2
 
 end EffectKernel.PhaseD
