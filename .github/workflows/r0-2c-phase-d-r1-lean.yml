@@ -106,12 +106,14 @@ jobs:
         working-directory: effect_kernel_r0_2c_phase_c
         run: |
           set -euo pipefail
-          mkdir -p ci_phase_d
+          mkdir -p ci_phase_d .lake/build/lib/lean/EffectKernel/PhaseD
           : > ci_phase_d/PHASE_D_BUILD.log
           if [ -d EffectKernel/PhaseD ]; then
             while IFS= read -r -d '' f; do
-              echo "===== $f =====" | tee -a ci_phase_d/PHASE_D_BUILD.log
-              lake env lean "$f" 2>&1 | tee -a ci_phase_d/PHASE_D_BUILD.log
+              out=".lake/build/lib/lean/${f%.lean}.olean"
+              mkdir -p "$(dirname "$out")"
+              echo "===== $f -> $out =====" | tee -a ci_phase_d/PHASE_D_BUILD.log
+              lake env lean -o "$out" "$f" 2>&1 | tee -a ci_phase_d/PHASE_D_BUILD.log
             done < <(find EffectKernel/PhaseD -type f -name '*.lean' ! -name 'AxiomAudit.lean' -print0 | sort -z)
             if [ -f EffectKernel/PhaseD/AxiomAudit.lean ]; then
               echo "===== EffectKernel/PhaseD/AxiomAudit.lean =====" | tee -a ci_phase_d/PHASE_D_BUILD.log
