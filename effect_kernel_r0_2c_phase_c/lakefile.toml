@@ -4,6 +4,3 @@ defaultTargets = ["EffectKernel"]
 
 [[lean_lib]]
 name = "EffectKernel"
-
-[[lean_lib]]
-name = "Std"
