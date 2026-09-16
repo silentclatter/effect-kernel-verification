@@ -42,7 +42,7 @@ jobs:
           set -euo pipefail
           mkdir -p ci
           set +e
-          grep -RInE --include='*.lean' '\b(sorry|admit|axiom|unsafe)\b' . | tee ci/PROOF_HOLE_SCAN.txt
+          grep -RInE --include='*.lean' '(\b(sorry|admit|axiom|unsafe|partial)\b|sorryAx)' . | tee ci/PROOF_HOLE_SCAN.txt
           status=${PIPESTATUS[0]}
           set -e
           if [ "$status" -eq 0 ]; then
