@@ -214,17 +214,19 @@ theorem rootAllocated_implies_lineage {s : State} (hw : GrantWellFormed s)
     {r g : GrantID} {gr : GrantRecord}
     (hg : s.gamma g = some gr) (hroot : gr.rootAllocation = r) :
     InLineage s r g := by
-  induction gr.generation using Nat.strongRecOn generalizing g gr with
+  generalize hgen : gr.generation = n
+  induction n using Nat.strongRecOn generalizing g gr with
   | ind n ih =>
       by_cases hnone : gr.parent = none
       · have hself := hw.root_ok g gr hg hnone
-        exact Or.inl (hself.symm.trans hroot)
+        exact Or.inl (hroot.symm.trans hself)
       · cases hpar : gr.parent with
         | none => exact False.elim (hnone hpar)
         | some p =>
             rcases hw.parent_ok g gr p hg hpar with ⟨pgr, hp, hlt, halloc⟩
             have hproot : pgr.rootAllocation = r := halloc.symm.trans hroot
-            have hpLine : InLineage s r p := ih pgr.generation hlt p pgr hp hproot
+            have hlt' : pgr.generation < n := by simpa only [← hgen] using hlt
+            have hpLine : InLineage s r p := ih pgr.generation hlt' p pgr rfl hp hproot
             rcases hpLine with hself | hanc
             · subst p
               exact Or.inr (.direct hg hpar)
@@ -602,53 +604,47 @@ theorem T4_budgetConservation {judge : ProvisionJudge}
       exact Nat.le_refl _
   | prepare hprev hs hsupport ih =>
       intro r d hroot
-      have hmass := lineage_eq_of_gamma_total hs.same.gamma
-        (fun g => reserve_total_eq hs.budgetUpdate g d) (ids := _) (r := r) (d := d)
-      rw [hmass]
+      rw [lineage_eq_of_gamma_total hs.same.gamma
+        (fun g => reserve_total_eq hs.budgetUpdate g d) (ids := _) (r := r) (d := d)]
       exact ih r d (by
         rcases hroot with ⟨gr, ht, hp, hra⟩
         rw [hs.same.gamma] at ht
         exact ⟨gr, ht, hp, hra⟩)
   | commitStart hprev hs hsupport ih =>
       intro r d hroot
-      have hmass := lineage_eq_of_state_budget (ids := _) hs.same.gamma hs.budgetSame (r := r) (d := d)
-      rw [hmass]
+      rw [lineage_eq_of_state_budget (ids := _) hs.same.gamma hs.budgetSame (r := r) (d := d)]
       exact ih r d (by
         rcases hroot with ⟨gr, ht, hp, hra⟩
         rw [hs.same.gamma] at ht
         exact ⟨gr, ht, hp, hra⟩)
   | commitSuccess hprev hs hsupport ih =>
       intro r d hroot
-      have hmass := lineage_eq_of_gamma_total hs.same.gamma
-        (fun g => settle_total_eq hs.budgetUpdate g d) (ids := _) (r := r) (d := d)
-      rw [hmass]
+      rw [lineage_eq_of_gamma_total hs.same.gamma
+        (fun g => settle_total_eq hs.budgetUpdate g d) (ids := _) (r := r) (d := d)]
       exact ih r d (by
         rcases hroot with ⟨gr, ht, hp, hra⟩
         rw [hs.same.gamma] at ht
         exact ⟨gr, ht, hp, hra⟩)
   | commitAbort hprev hs hsupport ih =>
       intro r d hroot
-      have hmass := lineage_eq_of_gamma_total hs.same.gamma
-        (fun g => settle_total_eq hs.budgetUpdate g d) (ids := _) (r := r) (d := d)
-      rw [hmass]
+      rw [lineage_eq_of_gamma_total hs.same.gamma
+        (fun g => settle_total_eq hs.budgetUpdate g d) (ids := _) (r := r) (d := d)]
       exact ih r d (by
         rcases hroot with ⟨gr, ht, hp, hra⟩
         rw [hs.same.gamma] at ht
         exact ⟨gr, ht, hp, hra⟩)
   | commitFaultUnknown hprev hs hsupport ih =>
       intro r d hroot
-      have hmass := lineage_eq_of_gamma_total hs.same.gamma
-        (fun g => burn_total_eq hs.budgetUpdate g d) (ids := _) (r := r) (d := d)
-      rw [hmass]
+      rw [lineage_eq_of_gamma_total hs.same.gamma
+        (fun g => burn_total_eq hs.budgetUpdate g d) (ids := _) (r := r) (d := d)]
       exact ih r d (by
         rcases hroot with ⟨gr, ht, hp, hra⟩
         rw [hs.same.gamma] at ht
         exact ⟨gr, ht, hp, hra⟩)
   | reconcile hprev hs hsupport ih =>
       intro r d hroot
-      have hmass := lineage_eq_of_gamma_total hs.same.gamma
-        (fun g => reconcile_total_eq hs.budgetUpdate g d) (ids := _) (r := r) (d := d)
-      rw [hmass]
+      rw [lineage_eq_of_gamma_total hs.same.gamma
+        (fun g => reconcile_total_eq hs.budgetUpdate g d) (ids := _) (r := r) (d := d)]
       exact ih r d (by
         rcases hroot with ⟨gr, ht, hp, hra⟩
         rw [hs.same.gamma] at ht
@@ -729,9 +725,8 @@ theorem T4_budgetConservation {judge : ProvisionJudge}
         exact hprevBound
   | expireReservation hprev hs hsupport ih =>
       intro r d hroot
-      have hmass := lineage_eq_of_gamma_total hs.same.gamma
-        (fun g => settle_total_eq hs.budgetUpdate g d) (ids := _) (r := r) (d := d)
-      rw [hmass]
+      rw [lineage_eq_of_gamma_total hs.same.gamma
+        (fun g => settle_total_eq hs.budgetUpdate g d) (ids := _) (r := r) (d := d)]
       exact ih r d (by
         rcases hroot with ⟨gr, ht, hp, hra⟩
         rw [hs.same.gamma] at ht
