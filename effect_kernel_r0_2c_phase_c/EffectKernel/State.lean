@@ -35,7 +35,6 @@ structure GrantWellFormed (s : State) : Prop where
   parent_ok : ∀ g gr p, s.gamma g = some gr → gr.parent = some p →
     ∃ pgr, s.gamma p = some pgr ∧
       pgr.generation < gr.generation ∧
-      gr.parentVersion = some pgr.version ∧
       gr.rootAllocation = pgr.rootAllocation
 
 def BudgetOwnersWellFormed (s : State) : Prop :=
