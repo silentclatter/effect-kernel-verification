@@ -1,5 +1,7 @@
 import EffectKernel.PhaseD.T3_PositiveAuthorityOrigin
 import EffectKernel.PhaseD.T5_ReservationPrecedesRelease
+import EffectKernel.PhaseD.T6_UniqueAuthorizationLinearization
 
 #print axioms EffectKernel.PhaseD.T3_positiveAuthorityOrigin
 #print axioms EffectKernel.PhaseD.T5_reservationPrecedesRelease
+#print axioms EffectKernel.PhaseD.T6_uniqueAuthorizationLinearization
