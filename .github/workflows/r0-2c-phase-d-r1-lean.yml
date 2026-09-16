@@ -112,7 +112,11 @@ jobs:
             while IFS= read -r -d '' f; do
               echo "===== $f =====" | tee -a ci_phase_d/PHASE_D_BUILD.log
               lake env lean "$f" 2>&1 | tee -a ci_phase_d/PHASE_D_BUILD.log
-            done < <(find EffectKernel/PhaseD -type f -name '*.lean' -print0 | sort -z)
+            done < <(find EffectKernel/PhaseD -type f -name '*.lean' ! -name 'AxiomAudit.lean' -print0 | sort -z)
+            if [ -f EffectKernel/PhaseD/AxiomAudit.lean ]; then
+              echo "===== EffectKernel/PhaseD/AxiomAudit.lean =====" | tee -a ci_phase_d/PHASE_D_BUILD.log
+              lake env lean EffectKernel/PhaseD/AxiomAudit.lean 2>&1 | tee -a ci_phase_d/PHASE_D_BUILD.log
+            fi
           fi
 
       - name: Hash proof sources and Phase D evidence
