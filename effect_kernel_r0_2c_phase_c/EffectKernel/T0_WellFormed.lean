@@ -69,14 +69,18 @@ theorem structuralStep_preserves_wf {s t : State}
   | preserve h =>
       constructor
       · intro g gr htg
-        apply hw.interval_ok g gr
-        rw [← h]
-        exact htg
-      · intro g gr p htg hparent
-        apply hw.parent_ok g gr p
-        · rw [← h]
+        have hsg : s.gamma g = some gr := by
+          rw [← h]
           exact htg
-        · exact hparent
+        exact hw.interval_ok g gr hsg
+      · intro g gr p htg hparent
+        have hsg : s.gamma g = some gr := by
+          rw [← h]
+          exact htg
+        rcases hw.parent_ok g gr p hsg hparent with ⟨pgr, hsp, hlt⟩
+        refine ⟨pgr, ?_, hlt⟩
+        rw [h]
+        exact hsp
   | authorityOnly h =>
       exact sameGrantStructure_preserves_wf h hw
   | delegate h =>
