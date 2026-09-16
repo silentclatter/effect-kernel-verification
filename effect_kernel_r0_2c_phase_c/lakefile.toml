@@ -1,0 +1,6 @@
+name = "effect_kernel_r0_2c_phase_c"
+version = "0.1.0"
+defaultTargets = ["EffectKernel"]
+
+[[lean_lib]]
+name = "EffectKernel"

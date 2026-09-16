@@ -1,0 +1,97 @@
+name: R0.2c Phase C Lean
+
+on:
+  push:
+    branches:
+      - r0-2c-phase-c-lean
+
+permissions:
+  contents: read
+
+jobs:
+  prove:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+
+      - name: Install elan
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh -o /tmp/elan-init.sh
+          sh /tmp/elan-init.sh -y --no-modify-path --default-toolchain none
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+
+      - name: Record exact tool versions
+        shell: bash
+        working-directory: effect_kernel_r0_2c_phase_c
+        run: |
+          set -euo pipefail
+          mkdir -p ci
+          {
+            echo "lean-toolchain=$(cat lean-toolchain)"
+            lean --version
+            lake --version
+          } | tee ci/VERSIONS.txt
+
+      - name: Reject proof holes and unsafe declarations
+        shell: bash
+        working-directory: effect_kernel_r0_2c_phase_c
+        run: |
+          set -euo pipefail
+          mkdir -p ci
+          set +e
+          grep -RInE --include='*.lean' '\b(sorry|admit|axiom|unsafe)\b' . | tee ci/PROOF_HOLE_SCAN.txt
+          status=${PIPESTATUS[0]}
+          set -e
+          if [ "$status" -eq 0 ]; then
+            echo "Forbidden proof-hole or unsafe token found." >&2
+            exit 1
+          elif [ "$status" -eq 1 ]; then
+            echo "CLEAN: no forbidden proof-hole or unsafe token found." | tee -a ci/PROOF_HOLE_SCAN.txt
+          else
+            echo "grep failed with status $status" >&2
+            exit "$status"
+          fi
+
+      - name: Build all Lean proofs
+        shell: bash
+        working-directory: effect_kernel_r0_2c_phase_c
+        run: |
+          set -euo pipefail
+          mkdir -p ci
+          lake build 2>&1 | tee ci/BUILD.log
+
+      - name: Hash proof sources and replay inputs
+        if: always()
+        shell: bash
+        working-directory: effect_kernel_r0_2c_phase_c
+        run: |
+          set -euo pipefail
+          mkdir -p ci
+          : > ci/PROOF_SOURCES_SHA256.txt
+          while IFS= read -r -d '' f; do
+            sha256sum "$f" >> ci/PROOF_SOURCES_SHA256.txt
+          done < <(find . -type f -name '*.lean' -print0 | sort -z)
+          {
+            sha256sum lean-toolchain
+            sha256sum lakefile.toml
+            sha256sum README.md
+            cat ci/PROOF_SOURCES_SHA256.txt
+            [ ! -f ci/VERSIONS.txt ] || sha256sum ci/VERSIONS.txt
+            [ ! -f ci/PROOF_HOLE_SCAN.txt ] || sha256sum ci/PROOF_HOLE_SCAN.txt
+            [ ! -f ci/BUILD.log ] || sha256sum ci/BUILD.log
+          } > ci/SHA256_MANIFEST.txt
+          cat ci/SHA256_MANIFEST.txt
+
+      - name: Upload Phase C-R proof replay artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: effect-kernel-r0-2c-phase-c-lean-${{ github.sha }}
+          if-no-files-found: error
+          retention-days: 90
+          path: |
+            effect_kernel_r0_2c_phase_c/
+            !effect_kernel_r0_2c_phase_c/.lake/
