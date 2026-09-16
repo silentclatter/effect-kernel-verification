@@ -1,3 +1,5 @@
 import EffectKernel.PhaseD.T3_PositiveAuthorityOrigin
+import EffectKernel.PhaseD.T5_ReservationPrecedesRelease
 
 #print axioms EffectKernel.PhaseD.T3_positiveAuthorityOrigin
+#print axioms EffectKernel.PhaseD.T5_reservationPrecedesRelease
