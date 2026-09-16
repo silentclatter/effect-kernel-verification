@@ -590,6 +590,7 @@ private theorem delegate_canonicalRoot_pre
     have hreceq : gr = rec := some_inj (ht.symm.trans h.gammaUpdate.childPost)
     subst gr
     rw [h.gammaUpdate.parentLink] at hp
+    contradiction
   · have hEq := h.gammaUpdate.preserveOther r hrc
     rw [hEq] at ht
     exact ⟨gr, ht, hp, hra⟩
@@ -724,9 +725,8 @@ theorem T4_budgetConservation {judge : ProvisionJudge}
       have hpreSupport := hprev.support
       have hb : ProvisionBudget _ _ _ _ := by
         simpa using hevent.update.budgetRule
-      have hmass := provision_mass_eq hpreSupport hevent.update.gammaSame hb
-        hevent.canonicalRoot (query := r) (d := d)
-      rw [hmass]
+      rw [provision_mass_eq hpreSupport hevent.update.gammaSame hb
+        hevent.canonicalRoot (query := r) (d := d)]
       simp only [Provisioned]
       have hprevBound := ih r d (by
         rcases hroot with ⟨gr, ht, hp, hra⟩
