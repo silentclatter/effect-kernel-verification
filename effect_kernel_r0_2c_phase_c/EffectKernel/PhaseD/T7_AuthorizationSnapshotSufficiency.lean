@@ -128,7 +128,7 @@ def SnapshotBinding (σ : AuthSnapshot) (s : State) : Prop :=
   SameEffectBinding (σ.predecessor.lifecycle σ.effectKey) (s.lifecycle σ.effectKey)
 
 /-- A linearization occurrence fixes the same binding at the terminal state of
-its containing trace.  This is proved by following the actual later full steps. -/
+its containing trace. This is proved by following the actual later full steps. -/
 private theorem snapshot_binding_at_terminal
     {E : FullEnv} {s0 z : State} {h : FullTrace E s0 z} {k : EffectKey}
     {j now : Nat} {before after : State}
@@ -229,13 +229,11 @@ theorem T7_authorizationSnapshotSufficiency
     hequiv.mp hauth
   have hbind : SnapshotBinding (snapshotOf before k now) after := by
     simpa [SnapshotBinding, snapshotOf] using hs.base.lifecycleUpdate.update.binding
-  have huniq :=
-    (T6_uniqueAuthorizationLinearization
-      (E := E) (s0 := s0) (z := z) (h := h) (k := k)
-      hinitState hinitUsed).1
   refine ⟨?_, hequiv, hsnap, hbind, ?_⟩
   · intro i now' a b hi
-    exact huniq hi ho
+    exact (T6_uniqueAuthorizationLinearization
+      (E := E) (s0 := s0) (z := z) (h := h) (k := k)
+      hinitState hinitUsed).1 hi ho
   · intro i lbl a b hi hji
     exact snapshot_binding_at_later_step ho hi hji
 
