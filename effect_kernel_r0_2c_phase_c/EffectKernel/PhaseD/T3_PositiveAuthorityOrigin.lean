@@ -60,14 +60,14 @@ theorem T3_positiveAuthorityOrigin
       change Delegate s t parent child rec q at hbase
       by_cases hc : child = g
       · subst child
-        have hrec : rec = gr := some_inj (hbase.gammaUpdate.childPost.symm.trans hpost)
+        have hrec : rec = gr := Option.some.inj (hbase.gammaUpdate.childPost.symm.trans hpost)
         subst rec
         rcases hbase.gammaUpdate.parentPre with ⟨pgr, hp, _hgen, _hver, _hroot⟩
         refine ⟨parent, q, rfl, hbase, ⟨pgr, hp⟩, hbase.gammaUpdate.parentLink, ?_, ?_, ?_, hbase.budgetUpdate⟩
         · exact hbase.gammaUpdate.permissionGuard pgr hp
         · exact hbase.gammaUpdate.validityGuard
         · exact hbase.gammaUpdate.delegabilityGuard
-      · have hgamma : t.gamma g = s.gamma g := hbase.gammaUpdate.preserveOther g hc
+      · have hgamma : t.gamma g = s.gamma g := hbase.gammaUpdate.preserveOther g (Ne.symm hc)
         have hsg : s.gamma g = some gr := hgamma.symm.trans hpost
         have hbad : (none : Option GrantRecord) = some gr := hpre.symm.trans hsg
         cases hbad
