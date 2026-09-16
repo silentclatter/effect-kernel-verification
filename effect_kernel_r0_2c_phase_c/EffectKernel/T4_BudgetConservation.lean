@@ -226,7 +226,7 @@ theorem rootAllocated_implies_lineage {s : State} (hw : GrantWellFormed s)
             rcases hw.parent_ok g gr p hg hpar with ⟨pgr, hp, hlt, halloc⟩
             have hproot : pgr.rootAllocation = r := halloc.symm.trans hroot
             have hlt' : pgr.generation < n := by simpa only [← hgen] using hlt
-            have hpLine : InLineage s r p := ih pgr.generation hlt' p pgr rfl hp hproot
+            have hpLine : InLineage s r p := ih pgr.generation hlt' hp hproot
             rcases hpLine with hself | hanc
             · subst p
               exact Or.inr (.direct hg hpar)
@@ -654,19 +654,18 @@ theorem T4_budgetConservation {judge : ProvisionJudge}
       have hpreSupport := hprev.support
       have hmass := delegate_mass_eq hpreSupport hs r d
       rw [hmass]
-      have hrootPre : CanonicalRoot _ r := by
+      exact ih r d (by
         rcases hroot with ⟨gr, ht, hp, hra⟩
         by_cases hrc : r = _
         · subst r
           rw [hs.gammaUpdate.parentLink] at hp
         · have hEq := hs.gammaUpdate.preserveOther r hrc
           rw [hEq] at ht
-          exact ⟨gr, ht, hp, hra⟩
-      exact ih r d hrootPre
+          exact ⟨gr, ht, hp, hra⟩)
   | revoke hprev hs hsupport ih =>
       intro r d hroot
       rw [revoke_mass_eq hs]
-      have hrootPre : CanonicalRoot _ r := by
+      exact ih r d (by
         rcases hroot with ⟨gr, ht, hp, hra⟩
         rcases hs.gammaUpdate.post with
           ⟨old, new, hsold, htnew, hrootEq, hparentEq, _hpv, _hgen, _hver,
@@ -678,8 +677,7 @@ theorem T4_budgetConservation {judge : ProvisionJudge}
           exact ⟨old, hsold, by simpa [hparentEq] using hp, by simpa [hrootEq] using hra⟩
         · have hEq := hs.gammaUpdate.preserveOther r hrg
           rw [hEq] at ht
-          exact ⟨gr, ht, hp, hra⟩
-      exact ih r d hrootPre
+          exact ⟨gr, ht, hp, hra⟩)
   | selfAttenuate hprev hs hsupport ih =>
       intro r d hroot
       have hle := attenuate_mass_le (ids := _) hs (r := r) (d := d)
@@ -713,11 +711,10 @@ theorem T4_budgetConservation {judge : ProvisionJudge}
         hevent.canonicalRoot (query := r) (d := d)
       rw [hmass]
       simp only [Provisioned]
-      have hrootPre : CanonicalRoot _ r := by
+      have hprevBound := ih r d (by
         rcases hroot with ⟨gr, ht, hp, hra⟩
         rw [hevent.update.gammaSame] at ht
-        exact ⟨gr, ht, hp, hra⟩
-      have hprevBound := ih r d hrootPre
+        exact ⟨gr, ht, hp, hra⟩)
       by_cases hrr : _ = r
       · simp [hrr]
         exact Nat.add_le_add_right hprevBound _
