@@ -67,7 +67,7 @@ namespace LifecycleReach
 
 theorem trans {a b c : LifecycleState} (hab : LifecycleReach a b) (hbc : LifecycleReach b c) : LifecycleReach a c := by
   induction hbc with
-  | refl _ => exact hab
+  | refl => exact hab
   | tail hxy hyz ih => exact .tail ih hyz
 
 end LifecycleReach
