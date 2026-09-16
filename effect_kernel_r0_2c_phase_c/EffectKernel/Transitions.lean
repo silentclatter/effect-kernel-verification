@@ -56,8 +56,7 @@ E3 is represented by a changed epoch and is therefore outside this implication. 
 def ConstitutionalSafe (s t : State) : Prop :=
   s.epoch = t.epoch → t.constitution = s.constitution ∧ t.constitution t.governance
 
-structure TrustedStep (f f' : ProofFrame) : Prop where
-  kind : TransitionKind
+structure TrustedStep (kind : TransitionKind) (f f' : ProofFrame) : Prop where
   structural : StructuralStep f.state f'.state
   lifecycle : LifecycleSafe f.state f'.state
   usedHistory : UsedHistorySafe f.state f'.state
