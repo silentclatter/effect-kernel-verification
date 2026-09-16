@@ -226,7 +226,7 @@ theorem rootAllocated_implies_lineage {s : State} (hw : GrantWellFormed s)
             rcases hw.parent_ok g gr p hg hpar with ⟨pgr, hp, hlt, halloc⟩
             have hproot : pgr.rootAllocation = r := halloc.symm.trans hroot
             have hlt' : pgr.generation < n := by simpa only [← hgen] using hlt
-            have hpLine : InLineage s r p := ih pgr.generation hlt' hp hproot
+            have hpLine : InLineage s r p := ih pgr.generation hlt' hp hproot rfl
             rcases hpLine with hself | hanc
             · subst p
               exact Or.inr (.direct hg hpar)
@@ -580,6 +580,52 @@ private theorem delegate_mass_eq {ids : List GrantID} {s t : State}
     contradiction
   exact delegate_mass_eq_aux hsupport.nodup hparentMem hchildNot h query d
 
+private theorem delegate_canonicalRoot_pre
+    {s t : State} {parent child : GrantID} {rec : GrantRecord} {q : BudgetDim → Nat}
+    (h : Delegate s t parent child rec q) {r : GrantID}
+    (hroot : CanonicalRoot t r) : CanonicalRoot s r := by
+  rcases hroot with ⟨gr, ht, hp, hra⟩
+  by_cases hrc : r = child
+  · subst r
+    have hreceq : gr = rec := some_inj (ht.symm.trans h.gammaUpdate.childPost)
+    subst gr
+    rw [h.gammaUpdate.parentLink] at hp
+  · have hEq := h.gammaUpdate.preserveOther r hrc
+    rw [hEq] at ht
+    exact ⟨gr, ht, hp, hra⟩
+
+private theorem revoke_canonicalRoot_pre
+    {s t : State} {g r : GrantID}
+    (h : Revoke s t g) (hroot : CanonicalRoot t r) : CanonicalRoot s r := by
+  rcases hroot with ⟨gr, ht, hp, hra⟩
+  rcases h.gammaUpdate.post with
+    ⟨old, new, hsold, htnew, hrootEq, hparentEq, _hpv, _hgen, _hver,
+      _hsubj, _hperm, _hvalid, _hdel, _hactive⟩
+  by_cases hrg : r = g
+  · subst r
+    have hneweq : gr = new := some_inj (ht.symm.trans htnew)
+    subst gr
+    exact ⟨old, hsold, by simpa [hparentEq] using hp, by simpa [hrootEq] using hra⟩
+  · have hEq := h.gammaUpdate.preserveOther r hrg
+    rw [hEq] at ht
+    exact ⟨gr, ht, hp, hra⟩
+
+private theorem attenuate_canonicalRoot_pre
+    {s t : State} {g r : GrantID} {q : BudgetDim → Nat}
+    (h : SelfAttenuate s t g q) (hroot : CanonicalRoot t r) : CanonicalRoot s r := by
+  rcases hroot with ⟨gr, ht, hp, hra⟩
+  rcases h.gammaUpdate.post with
+    ⟨old, new, hsold, htnew, hrootEq, hparentEq, _hpv, _hgen,
+      _hsubj, _hperm, _hvalid, _hwf, _hdel, _hactive⟩
+  by_cases hrg : r = g
+  · subst r
+    have hneweq : gr = new := some_inj (ht.symm.trans htnew)
+    subst gr
+    exact ⟨old, hsold, by simpa [hparentEq] using hp, by simpa [hrootEq] using hra⟩
+  · have hEq := h.gammaUpdate.preserveOther r hrg
+    rw [hEq] at ht
+    exact ⟨gr, ht, hp, hra⟩
+
 /-- Every final state of a BudgetHistory is an ordinary ReachableFrom state; the
 history adds only proof-level support/provision indexing. -/
 theorem budgetHistory_to_reachable {judge s0 ids0 alloc n s ids es}
@@ -654,46 +700,15 @@ theorem T4_budgetConservation {judge : ProvisionJudge}
       have hpreSupport := hprev.support
       have hmass := delegate_mass_eq hpreSupport hs r d
       rw [hmass]
-      exact ih r d (by
-        rcases hroot with ⟨gr, ht, hp, hra⟩
-        by_cases hrc : r = _
-        · subst r
-          rw [hs.gammaUpdate.parentLink] at hp
-        · have hEq := hs.gammaUpdate.preserveOther r hrc
-          rw [hEq] at ht
-          exact ⟨gr, ht, hp, hra⟩)
+      exact ih r d (delegate_canonicalRoot_pre hs hroot)
   | revoke hprev hs hsupport ih =>
       intro r d hroot
       rw [revoke_mass_eq hs]
-      exact ih r d (by
-        rcases hroot with ⟨gr, ht, hp, hra⟩
-        rcases hs.gammaUpdate.post with
-          ⟨old, new, hsold, htnew, hrootEq, hparentEq, _hpv, _hgen, _hver,
-            _hsubj, _hperm, _hvalid, _hdel, _hactive⟩
-        by_cases hrg : r = _
-        · subst r
-          have hneweq : gr = new := some_inj (ht.symm.trans htnew)
-          subst gr
-          exact ⟨old, hsold, by simpa [hparentEq] using hp, by simpa [hrootEq] using hra⟩
-        · have hEq := hs.gammaUpdate.preserveOther r hrg
-          rw [hEq] at ht
-          exact ⟨gr, ht, hp, hra⟩)
+      exact ih r d (revoke_canonicalRoot_pre hs hroot)
   | selfAttenuate hprev hs hsupport ih =>
       intro r d hroot
       have hle := attenuate_mass_le (ids := _) hs (r := r) (d := d)
-      exact Nat.le_trans hle (ih r d (by
-        rcases hroot with ⟨gr, ht, hp, hra⟩
-        rcases hs.gammaUpdate.post with
-          ⟨old, new, hsold, htnew, hrootEq, hparentEq, _hpv, _hgen,
-            _hsubj, _hperm, _hvalid, _hwf, _hdel, _hactive⟩
-        by_cases hrg : r = _
-        · subst r
-          have hneweq : gr = new := some_inj (ht.symm.trans htnew)
-          subst gr
-          exact ⟨old, hsold, by simpa [hparentEq] using hp, by simpa [hrootEq] using hra⟩
-        · have hEq := hs.gammaUpdate.preserveOther r hrg
-          rw [hEq] at ht
-          exact ⟨gr, ht, hp, hra⟩))
+      exact Nat.le_trans hle (ih r d (attenuate_canonicalRoot_pre hs hroot))
   | updatePolicyOrdinary hprev hs hsupport ih =>
       intro r d hroot
       have hb := hs.budgetRule
