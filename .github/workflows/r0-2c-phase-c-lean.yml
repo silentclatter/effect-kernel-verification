@@ -12,8 +12,22 @@ jobs:
   prove:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout branch
+      - name: Checkout exact commit
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Verify exact checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p effect_kernel_r0_2c_phase_c/ci
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$GITHUB_SHA"
+          {
+            echo "GITHUB_SHA=$GITHUB_SHA"
+            echo "CHECKED_OUT_SHA=$actual"
+          } | tee effect_kernel_r0_2c_phase_c/ci/CHECKOUT.txt
 
       - name: Install elan
         shell: bash
@@ -63,7 +77,30 @@ jobs:
           mkdir -p ci
           lake build 2>&1 | tee ci/BUILD.log
 
-      - name: Hash proof sources and replay inputs
+      - name: Check all five theorem declarations
+        shell: bash
+        working-directory: effect_kernel_r0_2c_phase_c
+        run: |
+          set -euo pipefail
+          cat > ci/THEOREM_DECLARATIONS.lean <<'EOF'
+          import EffectKernel.T4_BudgetConservation
+          #check EffectKernel.T0_wellFormed
+          #check EffectKernel.T9_lifecycle
+          #check EffectKernel.T1_constitution
+          #check EffectKernel.T2_transitiveAuthorityAttenuation
+          #check EffectKernel.T4_budgetConservation
+          #check EffectKernel.T4_e3_successor_epoch_start
+          EOF
+          lake env lean ci/THEOREM_DECLARATIONS.lean 2>&1 | tee ci/THEOREM_DECLARATIONS.txt
+
+      - name: Print theorem axioms
+        shell: bash
+        working-directory: effect_kernel_r0_2c_phase_c
+        run: |
+          set -euo pipefail
+          lake env lean EffectKernel/AxiomAudit.lean 2>&1 | tee ci/AXIOM_AUDIT.txt
+
+      - name: Hash proof sources and frozen evidence inputs
         if: always()
         shell: bash
         working-directory: effect_kernel_r0_2c_phase_c
@@ -73,25 +110,33 @@ jobs:
           : > ci/PROOF_SOURCES_SHA256.txt
           while IFS= read -r -d '' f; do
             sha256sum "$f" >> ci/PROOF_SOURCES_SHA256.txt
-          done < <(find . -type f -name '*.lean' -print0 | sort -z)
+          done < <(find . -type f -name '*.lean' ! -path './ci/*' -print0 | sort -z)
           {
             sha256sum lean-toolchain
             sha256sum lakefile.toml
             sha256sum README.md
+            sha256sum ../R0.2C_PHASE_C_FORMALIZATION_CORRESPONDENCE.md
+            sha256sum ../R0.2C_PHASE_C_ASSUMPTION_LEDGER.csv
+            sha256sum ../.github/workflows/r0-2c-phase-c-lean.yml
             cat ci/PROOF_SOURCES_SHA256.txt
+            [ ! -f ci/CHECKOUT.txt ] || sha256sum ci/CHECKOUT.txt
             [ ! -f ci/VERSIONS.txt ] || sha256sum ci/VERSIONS.txt
             [ ! -f ci/PROOF_HOLE_SCAN.txt ] || sha256sum ci/PROOF_HOLE_SCAN.txt
             [ ! -f ci/BUILD.log ] || sha256sum ci/BUILD.log
+            [ ! -f ci/THEOREM_DECLARATIONS.txt ] || sha256sum ci/THEOREM_DECLARATIONS.txt
+            [ ! -f ci/AXIOM_AUDIT.txt ] || sha256sum ci/AXIOM_AUDIT.txt
           } > ci/SHA256_MANIFEST.txt
           cat ci/SHA256_MANIFEST.txt
 
-      - name: Upload Phase C-R proof replay artifact
+      - name: Upload complete Phase C replay artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: effect-kernel-r0-2c-phase-c-lean-${{ github.sha }}
+          name: effect-kernel-r0-2c-phase-c-final-${{ github.sha }}
           if-no-files-found: error
           retention-days: 90
           path: |
             effect_kernel_r0_2c_phase_c/
+            R0.2C_PHASE_C_FORMALIZATION_CORRESPONDENCE.md
+            R0.2C_PHASE_C_ASSUMPTION_LEDGER.csv
             !effect_kernel_r0_2c_phase_c/.lake/
