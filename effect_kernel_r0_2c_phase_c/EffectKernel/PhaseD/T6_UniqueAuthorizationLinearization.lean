@@ -58,27 +58,21 @@ private theorem commitStart_index_unique
   induction h with
   | refl =>
       cases hi
-  | @step s t lblEnd hp hsEnd ih =>
+  | @step _ _ _ hp hsEnd ih =>
       cases hi with
       | last hp1 hs1 =>
           cases hj with
           | last hp2 hs2 => rfl
           | earlier hsEnd2 hjp =>
-              have hr : LifecycleReach .dispatching (s.lifecycle k).state :=
-                commitStart_reach_terminal hjp
+              have hr := commitStart_reach_terminal hjp
               have hnot := dispatching_cannot_reach_reserved hr
-              have hres : (s.lifecycle k).state = .reserved :=
-                hs1.base.lifecycleUpdate.update.preState
-              exact False.elim (hnot hres)
+              exact False.elim (hnot hs1.base.lifecycleUpdate.update.preState)
       | earlier hsEnd1 hip =>
           cases hj with
           | last hp2 hs2 =>
-              have hr : LifecycleReach .dispatching (s.lifecycle k).state :=
-                commitStart_reach_terminal hip
+              have hr := commitStart_reach_terminal hip
               have hnot := dispatching_cannot_reach_reserved hr
-              have hres : (s.lifecycle k).state = .reserved :=
-                hs2.base.lifecycleUpdate.update.preState
-              exact False.elim (hnot hres)
+              exact False.elim (hnot hs2.base.lifecycleUpdate.update.preState)
           | earlier hsEnd2 hjp =>
               exact ih hip hjp
 
