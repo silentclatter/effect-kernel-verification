@@ -586,7 +586,7 @@ private theorem delegate_canonicalRoot_pre
     (hroot : CanonicalRoot t r) : CanonicalRoot s r := by
   rcases hroot with ⟨gr, ht, hp, hra⟩
   by_cases hrc : r = child
-  · subst r
+  · rw [hrc] at ht
     have hreceq : gr = rec := some_inj (ht.symm.trans h.gammaUpdate.childPost)
     subst gr
     rw [h.gammaUpdate.parentLink] at hp
@@ -602,10 +602,11 @@ private theorem revoke_canonicalRoot_pre
     ⟨old, new, hsold, htnew, hrootEq, hparentEq, _hpv, _hgen, _hver,
       _hsubj, _hperm, _hvalid, _hdel, _hactive⟩
   by_cases hrg : r = g
-  · subst r
+  · rw [hrg] at ht
     have hneweq : gr = new := some_inj (ht.symm.trans htnew)
     subst gr
-    exact ⟨old, hsold, by simpa [hparentEq] using hp, by simpa [hrootEq] using hra⟩
+    exact ⟨old, by simpa [hrg] using hsold,
+      by simpa [hparentEq] using hp, by simpa [hrootEq] using hra⟩
   · have hEq := h.gammaUpdate.preserveOther r hrg
     rw [hEq] at ht
     exact ⟨gr, ht, hp, hra⟩
@@ -618,10 +619,11 @@ private theorem attenuate_canonicalRoot_pre
     ⟨old, new, hsold, htnew, hrootEq, hparentEq, _hpv, _hgen,
       _hsubj, _hperm, _hvalid, _hwf, _hdel, _hactive⟩
   by_cases hrg : r = g
-  · subst r
+  · rw [hrg] at ht
     have hneweq : gr = new := some_inj (ht.symm.trans htnew)
     subst gr
-    exact ⟨old, hsold, by simpa [hparentEq] using hp, by simpa [hrootEq] using hra⟩
+    exact ⟨old, by simpa [hrg] using hsold,
+      by simpa [hparentEq] using hp, by simpa [hrootEq] using hra⟩
   · have hEq := h.gammaUpdate.preserveOther r hrg
     rw [hEq] at ht
     exact ⟨gr, ht, hp, hra⟩
@@ -707,8 +709,8 @@ theorem T4_budgetConservation {judge : ProvisionJudge}
       exact ih r d (revoke_canonicalRoot_pre hs hroot)
   | selfAttenuate hprev hs hsupport ih =>
       intro r d hroot
-      have hle := attenuate_mass_le (ids := _) hs (r := r) (d := d)
-      exact Nat.le_trans hle (ih r d (attenuate_canonicalRoot_pre hs hroot))
+      exact Nat.le_trans (attenuate_mass_le hs (r := r) (d := d))
+        (ih r d (attenuate_canonicalRoot_pre hs hroot))
   | updatePolicyOrdinary hprev hs hsupport ih =>
       intro r d hroot
       have hb := hs.budgetRule
