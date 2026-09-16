@@ -132,7 +132,7 @@ theorem T9_lifecycle {s0 s : State}
     (h0 : WellFormed s0) (hr : ReachableFrom s0 s) :
     (∀ k, LifecycleReach (s0.lifecycle k).state (s.lifecycle k).state) ∧
     (∀ k, (s0.lifecycle k).used = true → (s.lifecycle k).used = true) := by
-  have _ := T0_wellFormed h0 hr
+  clear h0
   induction hr with
   | refl =>
       exact ⟨(fun _ => .refl _), (fun _ h => h)⟩
