@@ -214,8 +214,8 @@ theorem rootAllocated_implies_lineage {s : State} (hw : GrantWellFormed s)
     {r g : GrantID} {gr : GrantRecord}
     (hg : s.gamma g = some gr) (hroot : gr.rootAllocation = r) :
     InLineage s r g := by
-  induction gr.generation using Nat.strong_induction_on generalizing g gr with
-  | h n ih =>
+  induction gr.generation using Nat.strongRecOn generalizing g gr with
+  | ind n ih =>
       by_cases hnone : gr.parent = none
       · have hself := hw.root_ok g gr hg hnone
         exact Or.inl (hself.symm.trans hroot)
@@ -343,6 +343,7 @@ private theorem destroy_total_le {s t : State} {g q}
     have he := h.enough d
     omega
   · rw [h.other x hx]
+    exact Nat.le_refl _
 
 private theorem contribution_eq_of_gamma_total {s t : State} {r d}
     (hgamma : t.gamma = s.gamma)
@@ -409,6 +410,7 @@ private theorem attenuate_mass_le {ids : List GrantID} {s t : State} {r d g q}
     have hb := h.budgetUpdate.other x hx
     unfold LineageContribution
     rw [hg, hb]
+    exact Nat.le_refl _
 
 private theorem provision_mass_eq_aux {ids : List GrantID} {s t : State}
     {key query : GrantID} {d : BudgetDim} {delta : BudgetDim → Nat}
@@ -447,13 +449,17 @@ private theorem provision_mass_eq_aux {ids : List GrantID} {s t : State}
         rw [htailEq]
         by_cases hkq : key = query
         · subst query
-          simp [halloc, hrootTotal]
+          simp only [halloc, if_pos]
+          rw [hrootTotal]
+          exact Nat.add_right_comm _ _ _
         · have hneq : gr.rootAllocation ≠ query := by
             intro heq
             exact hkq (halloc.symm.trans heq)
           simp [hneq, hkq]
       · have hmemTail : key ∈ gs := by
-          simpa [hgk] using hmem
+          rcases List.mem_cons.mp hmem with hkg | htail
+          · exact False.elim (hgk hkg.symm)
+          · exact htail
         have hheadEq : LineageContribution t query d g = LineageContribution s query d g := by
           unfold LineageContribution
           rw [hgamma, hother g hgk]
@@ -479,21 +485,16 @@ private theorem provision_mass_eq {ids : List GrantID} {s t : State}
   exact provision_mass_eq_aux hsupport.nodup hmem hgamma
     ⟨gr, hgr, halloc⟩ htot hb.other
 
-private theorem delegate_mass_eq {ids : List GrantID} {s t : State}
+private theorem delegate_mass_eq_aux {ids : List GrantID} {s t : State}
     {parent child : GrantID} {rec : GrantRecord} {q : BudgetDim → Nat}
-    (hsupport : GammaSupportExact s ids)
+    (hn : ids.Nodup)
+    (hparentMem : parent ∈ ids)
+    (hchildNot : child ∉ ids)
     (h : Delegate s t parent child rec q)
     (query : GrantID) (d : BudgetDim) :
     LineageMass (child :: ids) t query d = LineageMass ids s query d := by
   rcases h.gammaUpdate.parentPre with
     ⟨pgr, hp, _hgen, _hpv, hrootEq⟩
-  have hparentMem : parent ∈ ids :=
-    (hsupport.member_iff parent).2 ⟨pgr, hp⟩
-  have hchildNot : child ∉ ids := by
-    intro hm
-    rcases (hsupport.member_iff child).1 hm with ⟨cgr, hc⟩
-    rw [h.gammaUpdate.fresh] at hc
-    contradiction
   have hpne : parent ≠ child := by
     intro heq
     subst parent
@@ -513,8 +514,7 @@ private theorem delegate_mass_eq {ids : List GrantID} {s t : State}
   induction ids with
   | nil => simp at hparentMem
   | cons g gs ih =>
-      have hnodup := hsupport.nodup
-      have hnodupTail : gs.Nodup := (List.nodup_cons.mp hnodup).2
+      have hnodupTail : gs.Nodup := (List.nodup_cons.mp hn).2
       by_cases hgp : g = parent
       · subst g
         have htailEq : LineageMass gs t query d = LineageMass gs s query d := by
@@ -523,7 +523,7 @@ private theorem delegate_mass_eq {ids : List GrantID} {s t : State}
           have hxp : x ≠ parent := by
             intro heq
             subst x
-            exact (List.nodup_cons.mp hnodup).1 hx
+            exact (List.nodup_cons.mp hn).1 hx
           have hxc : x ≠ child := by
             intro heq
             subst x
@@ -544,7 +544,9 @@ private theorem delegate_mass_eq {ids : List GrantID} {s t : State}
             exact hqr (hrootEq.symm.trans heq)
           simp [hqr, hcr]
       · have hparentTail : parent ∈ gs := by
-          simpa [hgp] using hparentMem
+          rcases List.mem_cons.mp hparentMem with hpg | htail
+          · exact False.elim (hgp hpg.symm)
+          · exact htail
         have hgc : g ≠ child := by
           intro heq
           subst g
@@ -552,22 +554,29 @@ private theorem delegate_mass_eq {ids : List GrantID} {s t : State}
         have hheadEq : LineageContribution t query d g = LineageContribution s query d g := by
           unfold LineageContribution
           rw [h.gammaUpdate.preserveOther g hgc, h.budgetUpdate.other g hgp hgc]
-        have htailSupport : GammaSupportExact s gs := by
-          refine ⟨hnodupTail, ?_⟩
-          intro x
-          constructor
-          · intro hx
-            exact (hsupport.member_iff x).1 (by simp [hx])
-          · intro hex
-            have hx := (hsupport.member_iff x).2 hex
-            rcases List.mem_cons.mp hx with hxeq | hxtail
-            · subst x
-              exact False.elim (hgp rfl)
-            · exact hxtail
-        have hi := ih htailSupport hparentTail hchildNot
+        have hchildNotTail : child ∉ gs := by
+          intro hc
+          exact hchildNot (by simp [hc])
+        have hi := ih hnodupTail hparentTail hchildNotTail
         simp only [LineageMass] at hi ⊢
         rw [hheadEq]
         omega
+
+private theorem delegate_mass_eq {ids : List GrantID} {s t : State}
+    {parent child : GrantID} {rec : GrantRecord} {q : BudgetDim → Nat}
+    (hsupport : GammaSupportExact s ids)
+    (h : Delegate s t parent child rec q)
+    (query : GrantID) (d : BudgetDim) :
+    LineageMass (child :: ids) t query d = LineageMass ids s query d := by
+  rcases h.gammaUpdate.parentPre with ⟨pgr, hp, _hgen, _hpv, _hrootEq⟩
+  have hparentMem : parent ∈ ids :=
+    (hsupport.member_iff parent).2 ⟨pgr, hp⟩
+  have hchildNot : child ∉ ids := by
+    intro hm
+    rcases (hsupport.member_iff child).1 hm with ⟨cgr, hc⟩
+    rw [h.gammaUpdate.fresh] at hc
+    contradiction
+  exact delegate_mass_eq_aux hsupport.nodup hparentMem hchildNot h query d
 
 /-- Every final state of a BudgetHistory is an ordinary ReachableFrom state; the
 history adds only proof-level support/provision indexing. -/
@@ -586,7 +595,6 @@ theorem T4_budgetConservation {judge : ProvisionJudge}
     ∀ r d, CanonicalRoot s r →
       LineageMass ids s r d ≤
         Provisioned (InitialProvision ids0 s0 alloc) es r d := by
-  have _hfinalwf : WellFormed s := T0_wellFormed h0wf h.reachable
   induction h with
   | init hsupport hledger =>
       intro r d _hroot
@@ -595,7 +603,7 @@ theorem T4_budgetConservation {judge : ProvisionJudge}
   | prepare hprev hs hsupport ih =>
       intro r d hroot
       have hmass := lineage_eq_of_gamma_total hs.same.gamma
-        (fun g => reserve_total_eq hs.budgetUpdate g d) (ids := _)
+        (fun g => reserve_total_eq hs.budgetUpdate g d) (ids := _) (r := r) (d := d)
       rw [hmass]
       exact ih r d (by
         rcases hroot with ⟨gr, ht, hp, hra⟩
@@ -612,7 +620,7 @@ theorem T4_budgetConservation {judge : ProvisionJudge}
   | commitSuccess hprev hs hsupport ih =>
       intro r d hroot
       have hmass := lineage_eq_of_gamma_total hs.same.gamma
-        (fun g => settle_total_eq hs.budgetUpdate g d) (ids := _)
+        (fun g => settle_total_eq hs.budgetUpdate g d) (ids := _) (r := r) (d := d)
       rw [hmass]
       exact ih r d (by
         rcases hroot with ⟨gr, ht, hp, hra⟩
@@ -621,7 +629,7 @@ theorem T4_budgetConservation {judge : ProvisionJudge}
   | commitAbort hprev hs hsupport ih =>
       intro r d hroot
       have hmass := lineage_eq_of_gamma_total hs.same.gamma
-        (fun g => settle_total_eq hs.budgetUpdate g d) (ids := _)
+        (fun g => settle_total_eq hs.budgetUpdate g d) (ids := _) (r := r) (d := d)
       rw [hmass]
       exact ih r d (by
         rcases hroot with ⟨gr, ht, hp, hra⟩
@@ -630,7 +638,7 @@ theorem T4_budgetConservation {judge : ProvisionJudge}
   | commitFaultUnknown hprev hs hsupport ih =>
       intro r d hroot
       have hmass := lineage_eq_of_gamma_total hs.same.gamma
-        (fun g => burn_total_eq hs.budgetUpdate g d) (ids := _)
+        (fun g => burn_total_eq hs.budgetUpdate g d) (ids := _) (r := r) (d := d)
       rw [hmass]
       exact ih r d (by
         rcases hroot with ⟨gr, ht, hp, hra⟩
@@ -639,7 +647,7 @@ theorem T4_budgetConservation {judge : ProvisionJudge}
   | reconcile hprev hs hsupport ih =>
       intro r d hroot
       have hmass := lineage_eq_of_gamma_total hs.same.gamma
-        (fun g => reconcile_total_eq hs.budgetUpdate g d) (ids := _)
+        (fun g => reconcile_total_eq hs.budgetUpdate g d) (ids := _) (r := r) (d := d)
       rw [hmass]
       exact ih r d (by
         rcases hroot with ⟨gr, ht, hp, hra⟩
@@ -694,8 +702,7 @@ theorem T4_budgetConservation {judge : ProvisionJudge}
           exact ⟨gr, ht, hp, hra⟩))
   | updatePolicyOrdinary hprev hs hsupport ih =>
       intro r d hroot
-      have hb : s✝.budget = s✝¹.budget := by
-        simpa using hs.budgetRule
+      have hb := hs.budgetRule
       rw [lineage_eq_of_state_budget (ids := _) hs.gammaSame hb (r := r) (d := d)]
       exact ih r d (by
         rcases hroot with ⟨gr, ht, hp, hra⟩
@@ -723,7 +730,7 @@ theorem T4_budgetConservation {judge : ProvisionJudge}
   | expireReservation hprev hs hsupport ih =>
       intro r d hroot
       have hmass := lineage_eq_of_gamma_total hs.same.gamma
-        (fun g => settle_total_eq hs.budgetUpdate g d) (ids := _)
+        (fun g => settle_total_eq hs.budgetUpdate g d) (ids := _) (r := r) (d := d)
       rw [hmass]
       exact ih r d (by
         rcases hroot with ⟨gr, ht, hp, hra⟩
@@ -750,5 +757,6 @@ theorem T4_e3_successor_epoch_start {s t : State} {ids : List GrantID}
   have _ := hsupport
   intro r d _hroot
   rw [initial_mass_eq hledger r d]
+  exact Nat.le_refl _
 
 end EffectKernel
