@@ -2,6 +2,10 @@ import EffectKernel.Base
 
 namespace EffectKernel
 
+abbrev GovernancePolicy := PolicyID
+abbrev Constitution := GovernancePolicy → Prop
+
+/-- Exact seven-component trusted runtime state. Trusted clock is external. -/
 structure State where
   constitution : Constitution
   governance : GovernancePolicy
@@ -24,46 +28,42 @@ inductive Ancestor (s : State) : GrantID → GrantID → Prop where
 
 def AncestorOrSelf (s : State) (a g : GrantID) : Prop := a = g ∨ Ancestor s a g
 
-structure WellFormed (s : State) : Prop where
+/-- Grant-graph part of structural/type/canonical well-formedness. -/
+structure GrantWellFormed (s : State) : Prop where
   interval_ok : ∀ g gr, s.gamma g = some gr → gr.validity.WellFormed
+  root_ok : ∀ g gr, s.gamma g = some gr → gr.parent = none → gr.rootAllocation = g
   parent_ok : ∀ g gr p, s.gamma g = some gr → gr.parent = some p →
-    ∃ pgr, s.gamma p = some pgr ∧ pgr.generation < gr.generation
+    ∃ pgr, s.gamma p = some pgr ∧
+      pgr.generation < gr.generation ∧
+      gr.parentVersion = some pgr.version ∧
+      gr.rootAllocation = pgr.rootAllocation
 
-structure SameGrantStructure (s t : State) : Prop where
-  from_post : ∀ g tgr, t.gamma g = some tgr →
-    ∃ sgr, s.gamma g = some sgr ∧
-      sgr.parent = tgr.parent ∧ sgr.parentVersion = tgr.parentVersion ∧
-      sgr.generation = tgr.generation
-  to_post : ∀ g sgr, s.gamma g = some sgr →
-    ∃ tgr, t.gamma g = some tgr ∧
-      sgr.parent = tgr.parent ∧ sgr.parentVersion = tgr.parentVersion ∧
-      sgr.generation = tgr.generation
-  post_interval_ok : ∀ g gr, t.gamma g = some gr → gr.validity.WellFormed
+def BudgetOwnersWellFormed (s : State) : Prop :=
+  ∀ g d, (s.budget g d).total > 0 → GrantExists s g
 
-structure DelegateGamma (s t : State) (child parent : GrantID) (rec : GrantRecord) : Prop where
-  fresh : s.gamma child = none
-  child_post : t.gamma child = some rec
-  parent_link : rec.parent = some parent
-  parent_pre : ∃ pgr, s.gamma parent = some pgr ∧ pgr.generation < rec.generation
-  interval_ok : rec.validity.WellFormed
-  preserve_other : ∀ g, g ≠ child → t.gamma g = s.gamma g
-
-inductive StructuralStep : State → State → Prop where
-  | preserve {s t} (h : t.gamma = s.gamma) : StructuralStep s t
-  | authorityOnly {s t} (h : SameGrantStructure s t) : StructuralStep s t
-  | delegate {s t child parent rec} (h : DelegateGamma s t child parent rec) : StructuralStep s t
-  | reprovision {s t} (h : WellFormed t) : StructuralStep s t
+/-- Structural/type/canonical well-formedness only. Nat/function/product types
+carry nonnegativity, map-key uniqueness, lifecycle-domain typing, EffectKey epoch
+namespacing shape, version/TCID/meta-auth typing. No substantive invariant is included. -/
+structure WellFormed (s : State) : Prop where
+  grants : GrantWellFormed s
+  budgetOwners : BudgetOwnersWellFormed s
 
 def ConstitutionHolds (s : State) : Prop := s.constitution s.governance
 
-def EffectiveAllows (s : State) (g : GrantID) (op : Operation) : Prop :=
-  ∀ a, AncestorOrSelf s a g → ∃ gr, s.gamma a = some gr ∧ gr.permission.allows op
+/-- Effective permission is exactly the meet/intersection of all raw permission
+components across self + ancestry. -/
+def P_eff (s : State) (g : GrantID) : Permission where
+  ops := fun op => ∀ a, AncestorOrSelf s a g → ∃ gr, s.gamma a = some gr ∧ gr.permission.ops op
+  effectClasses := fun ec => ∀ a, AncestorOrSelf s a g → ∃ gr, s.gamma a = some gr ∧ gr.permission.effectClasses ec
+  targetPred := fun x => ∀ a, AncestorOrSelf s a g → ∃ gr, s.gamma a = some gr ∧ gr.permission.targetPred x
+  paramPred := fun p => ∀ a, AncestorOrSelf s a g → ∃ gr, s.gamma a = some gr ∧ gr.permission.paramPred p
+  perEffectCaps := fun ec n => ∀ a, AncestorOrSelf s a g → ∃ gr, s.gamma a = some gr ∧ gr.permission.perEffectCaps ec n
 
-def P_eff (s : State) (g : GrantID) : Permission := ⟨EffectiveAllows s g⟩
+/-- Effective temporal validity is ancestry intersection. -/
+def EffectiveValid (s : State) (g : GrantID) (now : Nat) : Prop :=
+  ∀ a, AncestorOrSelf s a g → ∃ gr, s.gamma a = some gr ∧ gr.validity.Contains now
 
-def EffectiveValid (s : State) (g : GrantID) (t : Nat) : Prop :=
-  ∀ a, AncestorOrSelf s a g → ∃ gr, s.gamma a = some gr ∧ gr.validity.Contains t
-
+/-- Effective delegability is ancestry conjunction under Boolean attenuation. -/
 def EffectiveDelegable (s : State) (g : GrantID) : Prop :=
   ∀ a, AncestorOrSelf s a g → ∃ gr, s.gamma a = some gr ∧ gr.delegable = true
 
@@ -71,8 +71,17 @@ def LinkFresh (s : State) (child parent : GrantID) : Prop :=
   ∃ cgr pgr, s.gamma child = some cgr ∧ s.gamma parent = some pgr ∧
     cgr.parent = some parent ∧ cgr.parentVersion = some pgr.version
 
+def EffectiveVersionFresh (s : State) (g : GrantID) : Prop :=
+  ∀ child parent, AncestorOrSelf s child g → Parent s parent child → LinkFresh s child parent
+
+/-- Effective activity derives from actual ancestry: every required grant exists,
+is active and temporally valid, and every ancestry link is version-fresh. -/
 def EffectiveActive (s : State) (now : Nat) (g : GrantID) : Prop :=
-  ∀ a, AncestorOrSelf s a g →
-    ∃ gr, s.gamma a = some gr ∧ gr.active = true ∧ gr.validity.Contains now
+  (∀ a, AncestorOrSelf s a g →
+    ∃ gr, s.gamma a = some gr ∧ gr.active = true ∧ gr.validity.Contains now) ∧
+  EffectiveVersionFresh s g
+
+/-- Proof-level root-lineage membership is ancestry, not a stored runtime list. -/
+def InLineage (s : State) (r g : GrantID) : Prop := AncestorOrSelf s r g
 
 end EffectKernel
