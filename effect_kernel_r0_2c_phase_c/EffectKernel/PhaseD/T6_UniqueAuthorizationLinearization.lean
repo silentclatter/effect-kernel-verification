@@ -1,4 +1,4 @@
-import EffectKernel.PhaseD.T5_ReservationPrecedesRelease
+import EffectKernel.PhaseD.T4_5_TraceHistory
 
 namespace EffectKernel.PhaseD
 
@@ -55,28 +55,32 @@ private theorem commitStart_index_unique
     {i j nowI nowJ : Nat} {a b c d : State}
     (hi : StepAt h i (.commitStart k nowI) a b)
     (hj : StepAt h j (.commitStart k nowJ) c d) : i = j := by
-  induction hi with
-  | @last s t lbl hp hs =>
-      cases hj with
-      | last hp2 hs2 => rfl
-      | @earlier s2 t2 lblEnd hp2 hsEnd i2 lbl2 c2 d2 hjp =>
-          have hr : LifecycleReach .dispatching (s.lifecycle k).state :=
-            commitStart_reach_terminal hjp
-          have hnot := dispatching_cannot_reach_reserved hr
-          have hres : (s.lifecycle k).state = .reserved :=
-            hs.base.lifecycleUpdate.update.preState
-          exact False.elim (hnot hres)
-  | @earlier s t lblEnd hp hsEnd i0 lbl0 a0 b0 hip ih =>
-      cases hj with
-      | last hp2 hs2 =>
-          have hr : LifecycleReach .dispatching (s.lifecycle k).state :=
-            commitStart_reach_terminal hip
-          have hnot := dispatching_cannot_reach_reserved hr
-          have hres : (s.lifecycle k).state = .reserved :=
-            hs2.base.lifecycleUpdate.update.preState
-          exact False.elim (hnot hres)
-      | @earlier s2 t2 lblEnd2 hp2 hsEnd2 i2 lbl2 c2 d2 hjp =>
-          exact ih hjp
+  induction h with
+  | refl =>
+      cases hi
+  | @step s t lblEnd hp hsEnd ih =>
+      cases hi with
+      | last hp1 hs1 =>
+          cases hj with
+          | last hp2 hs2 => rfl
+          | earlier hsEnd2 hjp =>
+              have hr : LifecycleReach .dispatching (s.lifecycle k).state :=
+                commitStart_reach_terminal hjp
+              have hnot := dispatching_cannot_reach_reserved hr
+              have hres : (s.lifecycle k).state = .reserved :=
+                hs1.base.lifecycleUpdate.update.preState
+              exact False.elim (hnot hres)
+      | earlier hsEnd1 hip =>
+          cases hj with
+          | last hp2 hs2 =>
+              have hr : LifecycleReach .dispatching (s.lifecycle k).state :=
+                commitStart_reach_terminal hip
+              have hnot := dispatching_cannot_reach_reserved hr
+              have hres : (s.lifecycle k).state = .reserved :=
+                hs2.base.lifecycleUpdate.update.preState
+              exact False.elim (hnot hres)
+          | earlier hsEnd2 hjp =>
+              exact ih hip hjp
 
 /-- T6 — Unique Authorization Linearization.
 
