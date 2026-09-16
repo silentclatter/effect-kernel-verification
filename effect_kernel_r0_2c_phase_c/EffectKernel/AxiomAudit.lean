@@ -1,7 +1,3 @@
-import EffectKernel.T4_BudgetConservation
+import EffectKernel.T0_WellFormed
 
 #print axioms EffectKernel.T0_wellFormed
-#print axioms EffectKernel.T9_lifecycle
-#print axioms EffectKernel.T1_constitution
-#print axioms EffectKernel.T2_transitiveAuthorityAttenuation
-#print axioms EffectKernel.T4_budgetConservation
