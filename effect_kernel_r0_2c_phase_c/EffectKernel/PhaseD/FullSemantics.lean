@@ -60,43 +60,27 @@ def AuthorizedAt (E : FullEnv) (now : Nat) (s : State) (k : EffectKey) : Prop :=
     now ≤ lr.expiry ∧
     (∀ r, E.req a s.governance r → E.guarantees lr.tcid r)
 
-/-- Authorization-relevant immutable snapshot. This is proof/history material,
-not an added component of `State`. -/
+/-- Immutable authorization snapshot used only as proof/history material. It
+carries the actual predecessor trusted state, rather than reconstructing a
+synthetic state whose ancestry relation would be differently indexed. This is
+not an added component of runtime `State`; it is the proof object denoting the
+predecessor state at the unique authorization linearization. -/
 structure AuthSnapshot where
-  constitution : Constitution
-  governance : GovernancePolicy
-  gamma : GrantID → Option GrantRecord
-  record : LifecycleRecord
-  epoch : EpochID
+  predecessor : State
   now : Nat
   effectKey : EffectKey
 
-/-- Snapshot captured from the predecessor trusted state at linearization. -/
+/-- Snapshot captured from the actual predecessor trusted state at linearization. -/
 def snapshotOf (s : State) (k : EffectKey) (now : Nat) : AuthSnapshot where
-  constitution := s.constitution
-  governance := s.governance
-  gamma := s.gamma
-  record := s.lifecycle k
-  epoch := s.epoch
+  predecessor := s
   now := now
   effectKey := k
 
-/-- Reconstruct only the authorization projection from a snapshot. Dummy budget,
-meta-authorization, and non-selected lifecycle entries are semantically irrelevant
-to `AuthorizedAt`; they are deliberately not consulted. -/
-def snapshotState (σ : AuthSnapshot) : State where
-  constitution := σ.constitution
-  governance := σ.governance
-  gamma := σ.gamma
-  budget := fun _ _ => BudgetCell.zero
-  lifecycle := fun _ => σ.record
-  metaAuth := fun _ => false
-  epoch := σ.epoch
-
 def AuthorizedFromSnapshot (E : FullEnv) (σ : AuthSnapshot) : Prop :=
-  AuthorizedAt E σ.now (snapshotState σ) σ.effectKey
+  AuthorizedAt E σ.now σ.predecessor σ.effectKey
 
-/-- Explicit source-to-snapshot equivalence used by T7. -/
+/-- Exact source-to-snapshot equivalence used by T7. No theorem conclusion is
+stored in the snapshot; authorization is recomputed from the predecessor state. -/
 theorem authorizedAt_snapshot_iff (E : FullEnv) (s : State) (k : EffectKey) (now : Nat) :
     AuthorizedAt E now s k ↔ AuthorizedFromSnapshot E (snapshotOf s k now) := by
   rfl
@@ -173,7 +157,7 @@ def PrepareAdmissible (E : FullEnv) (now : Nat) (s : State)
     now ≤ lr.expiry
 
 /-- Extra guards missing from the foundational projection but frozen before R1. -/
-def FullGuard (E : FullEnv) (lbl : StepLabel) (s t : State) : Prop :=
+def FullGuard (E : FullEnv) (lbl : StepLabel) (s _t : State) : Prop :=
   match lbl with
   | .prepare k g _ now => PrepareAdmissible E now s k g
   | .commitStart k now => AuthorizedAt E now s k
