@@ -2,10 +2,12 @@ namespace EffectKernel
 
 abbrev GrantID := Nat
 abbrev BudgetDim := Nat
-abbrev EffectKey := Nat
 abbrev EpochID := Nat
+abbrev EffectID := Nat
+abbrev EffectKey := EpochID × EffectID
 abbrev SubjectID := Nat
 abbrev MetaAuthID := Nat
+abbrev TCID := Nat
 abbrev Operation := Nat
 abbrev GovernancePolicy := Nat
 abbrev Constitution := GovernancePolicy → Prop
@@ -52,6 +54,7 @@ inductive LifecycleState where
 inductive LifecycleEdge : LifecycleState → LifecycleState → Prop where
   | unseen_reserved : LifecycleEdge .unseen .reserved
   | reserved_dispatching : LifecycleEdge .reserved .dispatching
+  | reserved_aborted : LifecycleEdge .reserved .aborted
   | dispatching_committed : LifecycleEdge .dispatching .committed
   | dispatching_aborted : LifecycleEdge .dispatching .aborted
   | dispatching_unknown : LifecycleEdge .dispatching .unknown
@@ -96,7 +99,7 @@ structure LifecycleRecord where
   effectAstId : Nat
   grantVersion : Nat
   policyVersion : Nat
-  tcid : Nat
+  tcid : TCID
   reserved : BudgetDim → Nat
 
 end EffectKernel

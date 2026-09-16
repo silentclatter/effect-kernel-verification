@@ -10,7 +10,6 @@ structure State where
   lifecycle : EffectKey → LifecycleRecord
   metaAuth : MetaAuthID → Bool
   epoch : EpochID
-  clock : Nat
 
 def GrantExists (s : State) (g : GrantID) : Prop := ∃ gr, s.gamma g = some gr
 
@@ -72,8 +71,8 @@ def LinkFresh (s : State) (child parent : GrantID) : Prop :=
   ∃ cgr pgr, s.gamma child = some cgr ∧ s.gamma parent = some pgr ∧
     cgr.parent = some parent ∧ cgr.parentVersion = some pgr.version
 
-def EffectiveActive (s : State) (g : GrantID) : Prop :=
+def EffectiveActive (s : State) (now : Nat) (g : GrantID) : Prop :=
   ∀ a, AncestorOrSelf s a g →
-    ∃ gr, s.gamma a = some gr ∧ gr.active = true ∧ gr.validity.Contains s.clock
+    ∃ gr, s.gamma a = some gr ∧ gr.active = true ∧ gr.validity.Contains now
 
 end EffectKernel

@@ -41,7 +41,8 @@ theorem T2_delegability {s : State} {p c : GrantID} (hpc : Ancestor s p c) :
 /-- Revocation or expiry of any required ancestor prevents a descendant from being
 effectively active: equivalently, descendant activity implies ancestor activity. -/
 theorem T2_effectiveActive {s : State} {p c : GrantID} (hpc : Ancestor s p c) :
-    EffectiveActive s c → EffectiveActive s p := by
+    ∀ now, EffectiveActive s now c → EffectiveActive s now p := by
+  intro now
   intro hc a hap
   exact hc a (ancestorOrSelf_lift hap hpc)
 
@@ -62,7 +63,7 @@ theorem T2_transitiveAuthorityAttenuation {s : State} {p c : GrantID}
     (P_eff s c).le (P_eff s p) ∧
     (∀ t, EffectiveValid s c t → EffectiveValid s p t) ∧
     (EffectiveDelegable s c → EffectiveDelegable s p) ∧
-    (EffectiveActive s c → EffectiveActive s p) ∧
+    (∀ now, EffectiveActive s now c → EffectiveActive s now p) ∧
     (EffectiveVersionFresh s c → EffectiveVersionFresh s p) := by
   exact ⟨T2_permission hpc, T2_temporal hpc, T2_delegability hpc,
     T2_effectiveActive hpc, T2_versionFresh hpc⟩

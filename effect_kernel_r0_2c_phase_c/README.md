@@ -10,7 +10,9 @@ Trusted runtime state remains the seven-component tuple represented by `State`:
 
 `(C_e, G_n, Gamma_n, B_n, L_n, M_auth_n, e_n)`
 
-with trusted clock represented separately from transition index, as required by Phase A.
+The trusted monotonic clock is intentionally **not** a field of `State`; theorem statements quantify the relevant trusted time value separately, matching frozen `clock(K_n)` semantics and avoiding any added runtime state.
+
+`EffectKey` is represented exactly as `EpochID × EffectID`. The frozen proof-level `EXPIRE_RESERVATION` classification `RESERVED → ABORTED` is included explicitly in the lifecycle relation.
 
 `ProofFrame.budgetView` is not trusted runtime state. It is a proof-only projection of the frozen Phase A history-derived functions `LineageMass(r,n,d)` and `Provisioned(r,n,d)`. `BudgetDelta` encodes the exact conservation classes required by the frozen transition signatures: ordinary non-increase with unchanged provisioned ceiling, independently authorized E2+ provisioning with matched ceiling increase, and explicit E3 successor reprovision.
 
