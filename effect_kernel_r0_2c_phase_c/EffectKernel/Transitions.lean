@@ -48,9 +48,9 @@ def SameEffectBinding (a b : LifecycleRecord) : Prop :=
 
 /-- Exact single-key lifecycle update relation. Other effect records are unchanged. -/
 structure LifecycleUpdate (s t : State) (k : EffectKey)
-    (from to : LifecycleState) : Prop where
-  preState : (s.lifecycle k).state = from
-  postState : (t.lifecycle k).state = to
+    (src dst : LifecycleState) : Prop where
+  preState : (s.lifecycle k).state = src
+  postState : (t.lifecycle k).state = dst
   postUsed : (t.lifecycle k).used = true
   binding : SameEffectBinding (s.lifecycle k) (t.lifecycle k)
   other : ∀ j, j ≠ k → t.lifecycle j = s.lifecycle j
@@ -214,13 +214,13 @@ inductive PolicyMutation where
 /-- UPDATE_POLICY semantic judgment for the two frozen in-epoch classes relevant
 here. The constitutional successor-policy test is an explicit frozen guard. -/
 structure UpdatePolicy (m : PolicyMutation) (s t : State)
-    (newPolicy : GovernancePolicy) (meta : MetaAuthID) : Prop where
+    (newPolicy : GovernancePolicy) (mid : MetaAuthID) : Prop where
   constitutionSame : t.constitution = s.constitution
   governancePost : t.governance = newPolicy
   constitutionalGuard : s.constitution newPolicy
   gammaSame : t.gamma = s.gamma
   lifecycleSame : t.lifecycle = s.lifecycle
-  metaAuthUpdate : ConsumeMetaAuth s t meta
+  metaAuthUpdate : ConsumeMetaAuth s t mid
   epochSame : t.epoch = s.epoch
   budgetRule : match m with
     | .nonExpanding => t.budget = s.budget
@@ -334,7 +334,7 @@ inductive TrustedStep : TransitionKind → State → State → Prop where
   | delegate (h : Delegate s t parent child rec q) : TrustedStep .delegate s t
   | revoke (h : Revoke s t g) : TrustedStep .revoke s t
   | selfAttenuate (h : SelfAttenuate s t g q) : TrustedStep .selfAttenuate s t
-  | updatePolicy (h : UpdatePolicy cls s t newPolicy meta) : TrustedStep .updatePolicy s t
+  | updatePolicy (h : UpdatePolicy cls s t newPolicy mid) : TrustedStep .updatePolicy s t
   | expireReservation (h : ExpireReservation s t k g q refund burned now) : TrustedStep .expireReservation s t
   | expireGrant (h : ExpireGrant s t g now) : TrustedStep .expireGrant s t
 
