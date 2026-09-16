@@ -731,11 +731,7 @@ theorem T4_budgetConservation {judge : ProvisionJudge}
         rcases hroot with ⟨gr, ht, hp, hra⟩
         rw [hevent.update.gammaSame] at ht
         exact ⟨gr, ht, hp, hra⟩)
-      by_cases hrr : _ = r
-      · simp [hrr]
-        exact Nat.add_le_add_right hprevBound _
-      · simp [hrr]
-        exact hprevBound
+      exact Nat.add_le_add_right hprevBound _
   | expireReservation hprev hs hsupport ih =>
       intro r d hroot
       rw [lineage_eq_of_gamma_total hs.same.gamma
