@@ -8,7 +8,7 @@ open EffectKernel
 zero-based index in an arbitrary-length `FullTrace`.  This records no trusted
 runtime state and adds no transition kind. -/
 inductive StepAt {E : FullEnv} {s0 : State} :
-    {z : State} → FullTrace E s0 z → Nat → StepLabel → State → State → Prop where
+    {z : State} → FullTrace E s0 z → Nat → StepLabel → State → State → Type where
   | last {s t : State} {lbl : StepLabel}
       (h : FullTrace E s0 s) (hs : FullStep E lbl s t) :
       StepAt (.step h hs) h.length lbl s t
