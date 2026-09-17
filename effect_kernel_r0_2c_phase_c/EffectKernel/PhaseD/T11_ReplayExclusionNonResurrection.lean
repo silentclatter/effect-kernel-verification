@@ -58,7 +58,7 @@ theorem lifecycleReach_from_dispatching_cases {dst : LifecycleState}
 After the first successful PREPARE of an initially unused effect key, its durable
 used bit stays true through every in-epoch continuation. Hence the same key can
 never satisfy PREPARE freshness again. If a COMMIT_START occurs, the same
-lifecycle cannot later admit a second COMMIT_START because DISPATCHING cannot
+lifecycle cannot later permit a second COMMIT_START because DISPATCHING cannot
 return to RESERVED. Independently, any consumed meta-authorization remains
 consumed and therefore cannot authorize a second positive-provision update.
 The final conjunct exposes the T4 conservation bound for any valid history ending
