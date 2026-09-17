@@ -116,7 +116,7 @@ theorem T11_replayExclusionNonResurrection
   · intro v w x now1 now2 hstart hafter hsecond
     have hs : CommitStart u v k := hstart.base
     have hreach := fullTrace_lifecycle_reach_T11 hafter k
-    rw [hs.lifecycleUpdate.postState] at hreach
+    rw [hs.lifecycleUpdate.update.postState] at hreach
     have hcases := lifecycleReach_from_dispatching_cases hreach
     have hpre := hsecond.base.lifecycleUpdate.update.preState
     rcases hcases with hdisp | hcommit | habort | hunk
