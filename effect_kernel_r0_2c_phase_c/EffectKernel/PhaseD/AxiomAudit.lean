@@ -4,6 +4,7 @@ import EffectKernel.PhaseD.T6_UniqueAuthorizationLinearization
 import EffectKernel.PhaseD.T7_AuthorizationSnapshotSufficiency
 import EffectKernel.PhaseD.T10_UncertainOutcomeConservatism
 import EffectKernel.PhaseD.T11_ReplayExclusionNonResurrection
+import EffectKernel.PhaseD.T12_TargetContractIdentityStability
 
 #print axioms EffectKernel.PhaseD.T3_positiveAuthorityOrigin
 #print axioms EffectKernel.PhaseD.T5_reservationPrecedesRelease
@@ -11,3 +12,5 @@ import EffectKernel.PhaseD.T11_ReplayExclusionNonResurrection
 #print axioms EffectKernel.PhaseD.T7_authorizationSnapshotSufficiency
 #print axioms EffectKernel.PhaseD.T10_uncertainOutcomeConservatism
 #print axioms EffectKernel.PhaseD.T11_replayExclusionNonResurrection
+#print axioms EffectKernel.PhaseD.T12_targetContractIdentityStability
+#print axioms EffectKernel.PhaseD.T12_tcidChange_requiresDistinctAdmission
