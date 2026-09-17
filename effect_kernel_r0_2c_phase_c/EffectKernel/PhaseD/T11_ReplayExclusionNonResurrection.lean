@@ -4,6 +4,19 @@ namespace EffectKernel.PhaseD
 
 open EffectKernel
 
+/-- T9 lifecycle persistence lifted locally over a full in-epoch trace. -/
+theorem fullTrace_lifecycle_reach_T11 {E : FullEnv} {s0 s : State}
+    (h : FullTrace E s0 s) :
+    ∀ k, LifecycleReach (s0.lifecycle k).state (s.lifecycle k).state := by
+  induction h with
+  | refl =>
+      intro k
+      exact .refl _
+  | step hprev hstep ih =>
+      intro k
+      exact LifecycleReach.trans (ih k)
+        (trustedStep_lifecycle_one (fullStep_to_trusted hstep) k)
+
 /-- T9 used-bit persistence lifted over a full in-epoch trace. -/
 theorem fullTrace_used_monotone {E : FullEnv} {s0 s : State}
     (h : FullTrace E s0 s) :
@@ -102,7 +115,7 @@ theorem T11_replayExclusionNonResurrection
     cases hfresh
   · intro v w x now1 now2 hstart hafter hsecond
     have hs : CommitStart u v k := hstart.base
-    have hreach := fullTrace_lifecycle_reach hafter k
+    have hreach := fullTrace_lifecycle_reach_T11 hafter k
     rw [hs.lifecycleUpdate.postState] at hreach
     have hcases := lifecycleReach_from_dispatching_cases hreach
     have hpre := hsecond.base.lifecycleUpdate.update.preState
