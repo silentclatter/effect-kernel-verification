@@ -60,17 +60,16 @@ theorem sameEffectBinding_boundDescriptor_eq
     (h : SameEffectBinding (s.lifecycle k) (t.lifecycle k)) :
     boundDescriptor E k s = boundDescriptor E k t := by
   rcases h with ⟨heffect,hsubject,hgrant,hgrantVersion,hpolicy,htcid,hreserved,hexpiry⟩
-  apply AuthorizationBoundDescriptor.ext
-  · rfl
-  · simpa [boundDescriptor] using heffect
-  · simpa [boundDescriptor] using congrArg E.decodeEffect heffect
-  · simpa [boundDescriptor] using hsubject
-  · simpa [boundDescriptor] using hgrant
-  · simpa [boundDescriptor] using hgrantVersion
-  · simpa [boundDescriptor] using hpolicy
-  · simpa [boundDescriptor] using htcid
-  · simpa [boundDescriptor] using hreserved
-  · simpa [boundDescriptor] using hexpiry
+  unfold boundDescriptor
+  cases heffect
+  cases hsubject
+  cases hgrant
+  cases hgrantVersion
+  cases hpolicy
+  cases htcid
+  cases hreserved
+  cases hexpiry
+  rfl
 
 /-- Once a key is used, every actual full step preserves its authorization-bound
 record for that key. A second PREPARE on the same key is impossible because its
