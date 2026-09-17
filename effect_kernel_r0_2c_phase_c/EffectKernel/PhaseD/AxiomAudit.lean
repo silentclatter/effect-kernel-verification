@@ -5,6 +5,7 @@ import EffectKernel.PhaseD.T7_AuthorizationSnapshotSufficiency
 import EffectKernel.PhaseD.T10_UncertainOutcomeConservatism
 import EffectKernel.PhaseD.T11_ReplayExclusionNonResurrection
 import EffectKernel.PhaseD.T12_TargetContractIdentityStability
+import EffectKernel.PhaseD.T13_TargetContractCompliance
 
 #print axioms EffectKernel.PhaseD.T3_positiveAuthorityOrigin
 #print axioms EffectKernel.PhaseD.T5_reservationPrecedesRelease
@@ -14,3 +15,5 @@ import EffectKernel.PhaseD.T12_TargetContractIdentityStability
 #print axioms EffectKernel.PhaseD.T11_replayExclusionNonResurrection
 #print axioms EffectKernel.PhaseD.T12_targetContractIdentityStability
 #print axioms EffectKernel.PhaseD.T12_tcidChange_requiresDistinctAdmission
+#print axioms EffectKernel.PhaseD.T13_targetContractCompliance
+#print axioms EffectKernel.PhaseD.T13_failedInclusion_blocksCommitStart
