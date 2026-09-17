@@ -78,11 +78,10 @@ theorem T10_uncertainOutcomeConservatism
     lifecycleReach_from_unknown_cases hreach, ?_⟩
   · intro d
     have hb := hbase.budgetUpdate.atOwner d
-    constructor
-    · exact congrArg BudgetCell.avail hb
-    · constructor
-      · exact congrArg BudgetCell.resv hb
-      · exact congrArg BudgetCell.cons hb
+    have hav := congrArg BudgetCell.avail hb
+    have hresv := congrArg BudgetCell.resv hb
+    have hcons := congrArg BudgetCell.cons hb
+    exact ⟨hav, hresv, hcons⟩
   · intro s0 ids0 alloc n ids es h0wf hhist hsupport r d hroot
     have hhist' :
         BudgetHistory E.provisionJudge s0 ids0 alloc (n + 1) t ids es :=
