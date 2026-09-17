@@ -2,8 +2,10 @@ import EffectKernel.PhaseD.T3_PositiveAuthorityOrigin
 import EffectKernel.PhaseD.T5_ReservationPrecedesRelease
 import EffectKernel.PhaseD.T6_UniqueAuthorizationLinearization
 import EffectKernel.PhaseD.T7_AuthorizationSnapshotSufficiency
+import EffectKernel.PhaseD.T10_UncertainOutcomeConservatism
 
 #print axioms EffectKernel.PhaseD.T3_positiveAuthorityOrigin
 #print axioms EffectKernel.PhaseD.T5_reservationPrecedesRelease
 #print axioms EffectKernel.PhaseD.T6_uniqueAuthorizationLinearization
 #print axioms EffectKernel.PhaseD.T7_authorizationSnapshotSufficiency
+#print axioms EffectKernel.PhaseD.T10_uncertainOutcomeConservatism
